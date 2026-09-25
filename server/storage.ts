@@ -1457,6 +1457,9 @@ export class DataStore {
       instructions_livraison: order?.instructions_livraison,
       statut_commande: order?.statut,
       temps_preparation_min: order?.temps_preparation_min,
+      // AJOUT : téléphone du client et détail de ce qu'il faut récupérer
+      client_telephone: client?.telephone,
+      lignes: this.getOrderLinesByOrder(m.commande_id),
     };
   }
 
