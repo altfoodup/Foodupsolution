@@ -144,7 +144,11 @@ export class DataStore {
         this.airtableFetchAll('Signalements'),
         this.airtableFetchAll('Historique_actions')
       ]);
-
+ if (usersRecs.length === 0 && restsRecs.length === 0) {
+        console.warn('⚠️ Airtable n’a renvoyé aucune donnée, rechargement ignoré.');
+        return;
+      }
+      
       // 1. Build lookup maps for Airtable record IDs <-> Business IDs
       const userAirtableIdMap = new Map<string, string>(); // airtableId -> USR-xxx
       const userBusinessIdMap = new Map<string, string>(); // USR-xxx -> airtableId
