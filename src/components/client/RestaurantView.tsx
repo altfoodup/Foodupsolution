@@ -39,11 +39,19 @@ export const RestaurantView: React.FC<Props> = ({
     }
   };
 
-  const categories = ['Tout', ...Array.from(new Set(plats.map(p => p.categorie)))];
+  // Ordre d'affichage des catégories : entrées, plats, desserts, boissons, puis les autres
+  const CATEGORY_ORDER = ['Entrées', 'Entrée', 'Plats', 'Plat', 'Desserts', 'Dessert', 'Boissons', 'Boisson'];
+  const categoryRank = (c: string) => {
+    const i = CATEGORY_ORDER.indexOf(c);
+    return i === -1 ? CATEGORY_ORDER.length : i;
+  };
 
-  const filteredPlats = plats.filter(p => {
-    return selectedCategory === 'Tout' || p.categorie === selectedCategory;
-  });
+  const categories = ['Tout', ...Array.from(new Set(plats.map(p => p.categorie)))
+    .sort((a, b) => categoryRank(a) - categoryRank(b))];
+
+  const filteredPlats = plats
+    .filter(p => selectedCategory === 'Tout' || p.categorie === selectedCategory)
+    .sort((a, b) => categoryRank(a.categorie) - categoryRank(b.categorie));
 
   const handleAdd = (plat: Plat) => {
     addItem(plat, restaurant);
