@@ -330,7 +330,7 @@ export const LivreurApp: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-[#138A63] mt-1 shrink-0"></span>
                     <div>
                       <span className="text-[#6B6B66]">Livraison : </span>
-                      <b className="text-[#20201E]">{m.adresse_livraison || '12 rue Oberkampf'}</b>
+                      <b className="text-[#20201E]">{m.adresse_livraison || 'Adresse non renseignée'}</b>
                     </div>
                   </div>
                 </div>
@@ -359,7 +359,9 @@ export const LivreurApp: React.FC = () => {
             <div className="bg-white rounded-2xl border border-[#E8E5DF] p-5 flex flex-col gap-4 shadow-sm">
               <div className="flex items-center justify-between pb-3 border-b border-[#E8E5DF]">
                 <div>
-                  <span className="text-xs font-bold text-[#C94F00]">{activeMission.id}</span>
+                  <span className="text-xs font-bold text-[#C94F00]">
+                    Commande {activeMission.commande_id} · Mission {activeMission.id}
+                  </span>
                   <h2 className="text-base font-extrabold text-[#20201E]">{activeMission.restaurant_nom}</h2>
                 </div>
                 <span className="text-xs font-bold px-3 py-1 rounded-full bg-[#FFF1E5] text-[#9E3E00]">
@@ -368,11 +370,20 @@ export const LivreurApp: React.FC = () => {
               </div>
 
               {/* Progress status notification */}
-              {activeMission.statut === 'Attribuée' && (
+              {activeMission.statut === 'Attribuée' && activeMission.statut_commande !== 'Prête' && (
                 <div className="p-3 bg-[#FFF8EE] border border-[#F8D9BF] rounded-xl text-xs text-[#9E3E00] flex items-center gap-2">
                   <Clock size={16} className="shrink-0" />
                   <span>
                     Rendez-vous au restaurant pour récupérer la commande dès qu'elle est signalée prête.
+                  </span>
+                </div>
+              )}
+
+              {activeMission.statut === 'Attribuée' && activeMission.statut_commande === 'Prête' && (
+                <div className="p-3 bg-[#E7F4EE] border border-[#BCE1D1] rounded-xl text-xs text-[#138A63] flex items-center gap-2">
+                  <Bike size={16} className="shrink-0" />
+                  <span>
+                    La commande est prête : vous pouvez la récupérer au restaurant.
                   </span>
                 </div>
               )}
@@ -390,14 +401,31 @@ export const LivreurApp: React.FC = () => {
               <div className="p-3.5 bg-[#FFFCF8] border border-[#E8E5DF] rounded-xl flex flex-col gap-1.5 text-xs">
                 <span className="font-bold text-[#6B6B66] uppercase text-[10px]">1. Retrait restaurant</span>
                 <b className="text-sm text-[#20201E]">{activeMission.restaurant_nom}</b>
-                <p className="text-[#6B6B66]">{activeMission.restaurant_adresse || '10 rue Oberkampf, 75011 Paris'}</p>
+                <p className="text-[#6B6B66]">{activeMission.restaurant_adresse || 'Adresse non renseignée'}</p>
+
+                {/* Détail de ce qu'il faut récupérer */}
+                {activeMission.lignes && activeMission.lignes.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-[#E8E5DF] flex flex-col gap-1">
+                    <span className="font-bold text-[#6B6B66] text-[10px] uppercase">À récupérer</span>
+                    {activeMission.lignes.map((l) => (
+                      <div key={l.id} className="flex justify-between text-[#20201E]">
+                        <span>{l.quantite} × {l.nom_plat_enregistre}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Step 2: Client Dropoff */}
               <div className="p-3.5 bg-[#FFFCF8] border border-[#E8E5DF] rounded-xl flex flex-col gap-1.5 text-xs">
                 <span className="font-bold text-[#6B6B66] uppercase text-[10px]">2. Livraison client</span>
                 <b className="text-sm text-[#20201E]">{activeMission.client_nom || 'Client'}</b>
-                <p className="text-[#6B6B66]">{activeMission.adresse_livraison || '12 rue Oberkampf, 75011 Paris'}</p>
+                <p className="text-[#6B6B66]">{activeMission.adresse_livraison || 'Adresse non renseignée'}</p>
+                {activeMission.client_telephone && (
+                  <a href={`tel:${activeMission.client_telephone}`} className="text-[#C94F00] font-semibold">
+                    📞 {activeMission.client_telephone}
+                  </a>
+                )}
                 {activeMission.instructions_livraison && (
                   <p className="text-[#9E3E00] bg-[#FFF8EE] p-2 rounded-lg mt-1 italic">
                     Note : {activeMission.instructions_livraison}
@@ -417,10 +445,13 @@ export const LivreurApp: React.FC = () => {
               {activeMission.statut === 'Attribuée' ? (
                 <button
                   type="button"
+                  disabled={activeMission.statut_commande !== 'Prête'}
                   onClick={() => handlePickup(activeMission.id)}
-                  className="w-full py-4 bg-[#F26A00] hover:bg-[#C94F00] text-white font-extrabold text-sm rounded-xl shadow-md transition-colors"
+                  className="w-full py-4 bg-[#F26A00] hover:bg-[#C94F00] text-white font-extrabold text-sm rounded-xl shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Confirmer le retrait au restaurant
+                  {activeMission.statut_commande === 'Prête'
+                    ? 'Confirmer le retrait au restaurant'
+                    : 'En attente de préparation…'}
                 </button>
               ) : (
                 <button
