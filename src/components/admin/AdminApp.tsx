@@ -43,6 +43,29 @@ export const AdminApp: React.FC = () => {
   const [partnerRefuseReason, setPartnerRefuseReason] = useState('');
   const [partnerLoading, setPartnerLoading] = useState(false);
 
+  // Fiche détaillée d'un partenaire (restaurateur ou livreur)
+  const [selectedPartner, setSelectedPartner] = useState<any | null>(null);
+  const [partnerRestaurant, setPartnerRestaurant] = useState<any | null>(null);
+  const [partnerDishCount, setPartnerDishCount] = useState<number>(0);
+
+  const openPartner = async (p: any) => {
+    setSelectedPartner(p);
+    setPartnerRestaurant(null);
+    setPartnerDishCount(0);
+    if (p.role === 'Restaurateur' && p.restaurant_id) {
+      try {
+        const res = await fetch(`/api/restaurants/${p.restaurant_id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPartnerRestaurant(data.restaurant);
+          setPartnerDishCount((data.plats || []).length);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
   // Filters
   const [orderFilter, setOrderFilter] = useState<string>('Tous');
   const [reportFilter, setReportFilter] = useState<string>('Tous');
@@ -525,8 +548,12 @@ export const AdminApp: React.FC = () => {
               <tbody className="divide-y divide-[#E8E5DF]">
                 {partners.map(p => (
                   <tr key={p.id} className="hover:bg-[#FFF8EE]/40">
-                    <td className="py-2.5 px-3 font-bold text-[#20201E]">
-                      {p.prenom} {p.nom}
+                    <td
+                      className="py-2.5 px-3 font-bold text-[#20201E] cursor-pointer hover:text-[#C94F00]"
+                      onClick={() => openPartner(p)}
+                      title="Voir la fiche détaillée"
+                    >
+                      {p.prenom} {p.nom} <span className="text-[10px] font-semibold text-[#C94F00] underline">Voir la fiche</span>
                       {p.moyen_deplacement && <span className="block text-[11px] font-normal text-[#6B6B66]">{p.moyen_deplacement}</span>}
                     </td>
                     <td className="py-2.5 px-3">
@@ -571,6 +598,82 @@ export const AdminApp: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FICHE PARTENAIRE */}
+      {selectedPartner && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+          onClick={() => setSelectedPartner(null)}
+        >
+          <div
+            className="bg-[#FFFCF8] rounded-2xl border border-[#E8E5DF] p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <span className="text-xs font-bold text-[#C94F00]">{selectedPartner.id} · {selectedPartner.role}</span>
+                <h3 className="text-lg font-bold text-[#20201E]">{selectedPartner.prenom} {selectedPartner.nom}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPartner(null)}
+                className="w-8 h-8 rounded-full border border-[#E8E5DF] text-[#6B6B66] hover:text-[#20201E]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2 text-xs">
+              <div className="p-3 bg-white border border-[#E8E5DF] rounded-xl flex flex-col gap-1">
+                <span className="font-bold text-[#6B6B66] uppercase text-[10px]">Coordonnées</span>
+                <span>📧 {selectedPartner.email || '—'}</span>
+                <span>📞 {selectedPartner.telephone || '—'}</span>
+                <span>📍 {selectedPartner.adresse || '—'}</span>
+              </div>
+
+              <div className="p-3 bg-white border border-[#E8E5DF] rounded-xl flex flex-col gap-1">
+                <span className="font-bold text-[#6B6B66] uppercase text-[10px]">Validation</span>
+                <span>Statut : <b>{selectedPartner.statut_validation}</b></span>
+                <span>Compte actif : <b>{selectedPartner.compte_actif ? 'Oui' : 'Non'}</b></span>
+                {selectedPartner.date_decision && (
+                  <span>Date de décision : {new Date(selectedPartner.date_decision).toLocaleString('fr-FR')}</span>
+                )}
+                {selectedPartner.motif_decision && <span>Motif : {selectedPartner.motif_decision}</span>}
+              </div>
+
+              {selectedPartner.role === 'Livreur' && (
+                <div className="p-3 bg-[#E7F4EE] border border-[#BCE1D1] rounded-xl flex flex-col gap-1">
+                  <span className="font-bold text-[#138A63] uppercase text-[10px]">Livreur</span>
+                  <span>Moyen de transport : <b>{selectedPartner.moyen_deplacement || '—'}</b></span>
+                  <span>Zone de livraison : <b>{selectedPartner.zone_livraison || '—'}</b></span>
+                  <span>Disponible : <b>{selectedPartner.disponible_livraison ? 'Oui' : 'Non'}</b></span>
+                </div>
+              )}
+
+              {selectedPartner.role === 'Restaurateur' && (
+                <div className="p-3 bg-[#FFF8EE] border border-[#F8D9BF] rounded-xl flex flex-col gap-1">
+                  <span className="font-bold text-[#9E3E00] uppercase text-[10px]">Restaurant</span>
+                  {partnerRestaurant ? (
+                    <>
+                      <b className="text-sm">{partnerRestaurant.nom} ({partnerRestaurant.id})</b>
+                      <span>Cuisine : {partnerRestaurant.cuisine}</span>
+                      <span>Adresse : {partnerRestaurant.adresse}</span>
+                      <span>Quartier : {partnerRestaurant.quartier}</span>
+                      <span>Frais de livraison : {Number(partnerRestaurant.frais_livraison).toFixed(2).replace('.', ',')} €</span>
+                      <span>Délai : {partnerRestaurant.delai}</span>
+                      <span>Plats à la carte : {partnerDishCount}</span>
+                    </>
+                  ) : (
+                    <span className="text-[#6B6B66]">
+                      {selectedPartner.restaurant_nom || 'Aucun restaurant rattaché'}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
