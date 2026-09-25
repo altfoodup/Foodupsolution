@@ -16,19 +16,20 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState('');
   const [telephone, setTelephone] = useState('');
   const [adresse, setAdresse] = useState('');
-  const [codePostal, setCodePostal] = useState('75011');
+  const [codePostal, setCodePostal] = useState('75014');
   const [ville, setVille] = useState('Paris');
   const [instructions, setInstructions] = useState('');
 
   // Courier
   const [moyenDeplacement, setMoyenDeplacement] = useState('Vélo électrique');
-  const [zoneLivraison, setZoneLivraison] = useState('Paris 11e / Oberkampf');
+  const [zoneLivraison, setZoneLivraison] = useState('Paris 14e');
 
   // Restaurant
   const [nomRestaurant, setNomRestaurant] = useState('');
-  const [cuisine, setCuisine] = useState('Italien');
+  const [cuisine, setCuisine] = useState('Cuisine française');
+  const [fraisLivraison, setFraisLivraison] = useState('2.90');
   const [descriptionResto, setDescriptionResto] = useState('');
-  const [quartier, setQuartier] = useState('Oberkampf');
+  const [quartier, setQuartier] = useState('Plaisance');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
           description_restaurant: descriptionResto,
           quartier,
           delai: '20–30 min',
-          frais_livraison: 2.50
+          frais_livraison: Number(String(fraisLivraison).replace(',', '.')) || 2.90
         })
       });
 
@@ -262,12 +263,18 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     onChange={(e) => setCuisine(e.target.value)}
                     className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
                   >
-                    <option value="Italien">Italien</option>
-                    <option value="Français">Français</option>
-                    <option value="Libanais">Libanais</option>
-                    <option value="Asiatique">Asiatique</option>
-                    <option value="Burgers">Burgers</option>
-                    <option value="Healthy">Healthy</option>
+                    <option value="Cuisine française">Cuisine française</option>
+                    <option value="Bistrot moderne">Bistrot moderne</option>
+                    <option value="Italienne">Italienne</option>
+                    <option value="Pizza">Pizza</option>
+                    <option value="Libanaise">Libanaise</option>
+                    <option value="Mexicaine">Mexicaine</option>
+                    <option value="Indienne">Indienne</option>
+                    <option value="Thaïlandaise">Thaïlandaise</option>
+                    <option value="Japonaise">Japonaise</option>
+                    <option value="Tibétaine">Tibétaine</option>
+                    <option value="Végétarienne">Végétarienne</option>
+                    <option value="Healthy & bowls">Healthy & bowls</option>
                   </select>
                 </div>
                 <div>
@@ -276,7 +283,7 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     type="text"
                     value={quartier}
                     onChange={(e) => setQuartier(e.target.value)}
-                    placeholder="Bastille / Oberkampf"
+                    placeholder="Plaisance / Alésia"
                     className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
                   />
                 </div>
@@ -290,6 +297,23 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   placeholder="Spécialités de pâtes fraîches et pizzas au feu de bois..."
                   className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#20201E] mb-1">Frais de livraison (€)</label>
+                  <input
+                    type="number"
+                    step="0.10"
+                    min="0"
+                    value={fraisLivraison}
+                    onChange={(e) => setFraisLivraison(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#20201E] mb-1">Frais de service</label>
+                  <div className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm bg-[#FFF8EE] text-[#6B6B66]">1,00 € (fixé par FoodUp)</div>
+                </div>
               </div>
               <p className="text-[11px] text-[#6B6B66]">
                 ℹ️ Votre établissement sera soumis à validation par l’administrateur FoodUp avant ouverture aux commandes.
@@ -316,13 +340,15 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-[#20201E] mb-1">Zone de livraison</label>
-                  <input
-                    type="text"
+                  <select
                     value={zoneLivraison}
                     onChange={(e) => setZoneLivraison(e.target.value)}
-                    placeholder="Paris 11e / 10e"
                     className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
-                  />
+                  >
+                    <option value="Paris 14e">Paris 14e</option>
+                    <option value="Paris 15e">Paris 15e</option>
+                    <option value="Paris Centre">Paris Centre</option>
+                  </select>
                 </div>
               </div>
               <p className="text-[11px] text-[#6B6B66]">
