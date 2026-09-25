@@ -1,337 +1,235 @@
 import React, { useState, useEffect } from 'react';
+import { Restaurant, Plat } from '../../types.js';
 import { useCart } from '../../context/CartContext.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { Plat } from '../../types.js';
-import { X, Plus, Minus, Trash2, ArrowLeft, ShoppingBag, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Clock, Bike, Plus, Check } from 'lucide-react';
 
 interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  onOrderSuccess: (orderId: string) => void;
-  onContinueShopping: () => void;
+  restaurant: Restaurant;
+  onBack: () => void;
+  onOpenCart: () => void;
 }
 
-export const CartModal: React.FC<Props> = ({
-  isOpen,
-  onClose,
-  onOrderSuccess,
-  onContinueShopping,
+export const RestaurantView: React.FC<Props> = ({
+  restaurant,
+  onBack,
+  onOpenCart
 }) => {
-  const { 
-    restaurant, 
-    items, 
-    updateQuantity, 
-    removeItem, 
-    clearCart, 
-    subtotal, 
-    fraisLivraison, 
-    fraisService, 
-    total,
-    addItem
-  } = useCart();
-  const { currentUser } = useAuth();
+  const { addItem, items, itemCount, total } = useCart();
+  const [plats, setPlats] = useState<Plat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>('Tout');
+  const [addedNotice, setAddedNotice] = useState<string | null>(null);
 
-  const [crossSellDishes, setCrossSellDishes] = useState<Plat[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch cross-sell candidates from the same restaurant (desserts, drinks, sides)
   useEffect(() => {
-    if (restaurant && isOpen) {
-      fetch(`/api/restaurants/${restaurant.id}/dishes`)
-        .then(res => res.json())
-        .then((dishes: Plat[]) => {
-          const currentIds = new Set(items.map(i => i.plat.id));
-          // Filter out items already in cart, prioritize Desserts / Boissons
-          const candidates = dishes
-            .filter(d => !currentIds.has(d.id) && d.disponible)
-            .sort((a, b) => {
-              const priority = (cat: string) => cat === 'Desserts' ? 1 : cat === 'Boissons' ? 2 : 3;
-              return priority(a.categorie) - priority(b.categorie);
-            })
-            .slice(0, 3);
-          setCrossSellDishes(candidates);
-        })
-        .catch(err => console.error('Error fetching cross-sell', err));
-    }
-  }, [restaurant?.id, items, isOpen]);
+    fetchDishes();
+  }, [restaurant.id]);
 
-  if (!isOpen) return null;
-
-  const handleCheckout = async () => {
-    if (!currentUser) {
-      setError('Veuillez vous connecter pour valider la commande.');
-      return;
-    }
-    if (!restaurant || items.length === 0) return;
-
-    setIsSubmitting(true);
-    setError(null);
-
+  const fetchDishes = async () => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': currentUser.id
-        },
-        body: JSON.stringify({
-          restaurant_id: restaurant.id,
-          adresse_livraison: currentUser.adresse || '12 rue Oberkampf, 75011 Paris',
-          instructions_livraison: currentUser.instructions_livraison || '',
-          items: items.map(i => ({
-            plat_id: i.plat.id,
-            quantite: i.quantite
-          }))
-        })
-      });
-
-      if (!res.ok) {
+      const res = await fetch(`/api/restaurants/${restaurant.id}/dishes`);
+      if (res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la validation de la commande.');
+        setPlats(data);
       }
-
-      const createdOrder = await res.json();
-      clearCart();
-      onClose();
-      onOrderSuccess(createdOrder.id);
-    } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue.');
+    } catch (e) {
+      console.error('Error fetching dishes', e);
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
+  // Ordre d'affichage : entrées, plats, desserts, boissons, puis le reste.
+  // On compare sans majuscules ni accents, et sur le début du mot,
+  // pour reconnaître aussi "Entrée", "Plat principal", "dessert", etc.
+  const normalize = (c: string) =>
+    (c || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const categoryRank = (c: string) => {
+    const n = normalize(c);
+    if (n.startsWith('entree')) return 0;
+    if (n.startsWith('plat')) return 1;
+    if (n.startsWith('dessert')) return 2;
+    if (n.startsWith('boisson')) return 3;
+    return 4;
+  };
+
+  const categories = ['Tout', ...Array.from(new Set(plats.map(p => p.categorie)))
+    .sort((a, b) => categoryRank(a) - categoryRank(b))];
+
+  const filteredPlats = plats
+    .filter(p => selectedCategory === 'Tout' || p.categorie === selectedCategory)
+    .sort((a, b) => categoryRank(a.categorie) - categoryRank(b.categorie));
+
+  const handleAdd = (plat: Plat) => {
+    addItem(plat, restaurant);
+    setAddedNotice(plat.nom);
+    setTimeout(() => setAddedNotice(null), 1800);
+  };
+
+  const getQuantityInCart = (platId: string) => {
+    const item = items.find(i => i.plat.id === platId);
+    return item ? item.quantite : 0;
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#FFFCF8] flex flex-col max-w-[480px] mx-auto overflow-hidden animate-in fade-in duration-200">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[#E8E5DF] bg-white">
+    <div className="flex flex-col min-h-screen pb-28">
+      {/* Top Header / Photo */}
+      <div className="relative h-[220px] bg-[#FFF1E5] border-b border-[#E8E5DF]">
+        {restaurant.photo && (
+          <img
+            src={restaurant.photo}
+            alt={restaurant.nom}
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+
         <button
           type="button"
-          onClick={onClose}
-          className="w-9 h-9 rounded-full flex items-center justify-center border border-[#E8E5DF] text-[#20201E] hover:bg-[#FFF8EE]"
+          onClick={onBack}
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/90 text-[#20201E] flex items-center justify-center backdrop-blur-xs shadow-md hover:bg-white transition-colors"
+          aria-label="Retour"
         >
-          <ArrowLeft size={18} strokeWidth={2} />
+          <ArrowLeft size={20} strokeWidth={2.2} />
         </button>
-        <div className="text-center">
-          <h2 className="text-base font-bold text-[#20201E]">Mon Panier</h2>
-          {restaurant && (
-            <p className="text-xs text-[#6B6B66]">{restaurant.nom}</p>
-          )}
+
+        <div className="absolute bottom-4 left-5 right-5 text-white">
+          <span className="text-[12px] font-semibold bg-[#F26A00] px-2.5 py-0.5 rounded-full inline-block mb-1.5 shadow-2xs">
+            {restaurant.cuisine}
+          </span>
+          <h1 className="text-[24px] font-extrabold text-white leading-tight drop-shadow-xs">
+            {restaurant.nom}
+          </h1>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-9 h-9 rounded-full flex items-center justify-center border border-[#E8E5DF] text-[#6B6B66] hover:text-[#20201E]"
-        >
-          <X size={18} strokeWidth={2} />
-        </button>
       </div>
 
-      {/* Content */}
-      <div className="grow overflow-y-auto p-5 flex flex-col gap-6">
-        {items.length === 0 ? (
-          <div className="my-auto text-center py-16 flex flex-col items-center gap-3">
-            <div className="w-16 h-16 rounded-full bg-[#FFF1E5] text-[#C94F00] flex items-center justify-center">
-              <ShoppingBag size={28} />
-            </div>
-            <h3 className="text-lg font-bold text-[#20201E]">Votre panier est vide</h3>
-            <p className="text-sm text-[#6B6B66] max-w-xs">
-              Découvrez les plats des restaurants indépendants de votre quartier.
-            </p>
+      {/* Info bar */}
+      <div className="px-5 py-3.5 bg-white border-b border-[#E8E5DF] flex items-center justify-between text-xs text-[#6B6B66]">
+        <div className="flex items-center gap-1.5">
+          <Clock size={15} className="text-[#F26A00]" />
+          <span className="font-semibold text-[#20201E]">{restaurant.delai}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Bike size={15} className="text-[#F26A00]" />
+          <span>Livraison {restaurant.frais_livraison.toFixed(2).replace('.', ',')} €</span>
+        </div>
+        <span className="text-[#6B6B66]">{restaurant.quartier}</span>
+      </div>
+
+      {/* Description */}
+      <div className="px-5 pt-3 pb-2 text-[14px] text-[#6B6B66]">
+        {restaurant.description}
+      </div>
+
+      {/* Categories */}
+      {categories.length > 2 && (
+        <div className="flex gap-2 overflow-x-auto px-5 py-3 no-scrollbar">
+          {categories.map((cat) => (
             <button
+              key={cat}
               type="button"
-              onClick={onClose}
-              className="mt-2 px-6 py-2.5 rounded-full bg-[#F26A00] text-white font-semibold text-sm hover:bg-[#C94F00] transition-colors"
+              onClick={() => setSelectedCategory(cat)}
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                selectedCategory === cat
+                  ? 'bg-[#C94F00] text-white border-[#C94F00]'
+                  : 'bg-white text-[#20201E] border-[#E8E5DF] hover:border-[#C94F00]'
+              }`}
             >
-              Découvrir la carte
+              {cat}
             </button>
+          ))}
+        </div>
+      )}
+
+      {/* Dishes List */}
+      <div className="px-5 pt-3 flex flex-col gap-3">
+        {loading ? (
+          <div className="flex flex-col gap-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="animate-pulse h-24 bg-white rounded-2xl border border-[#E8E5DF]"></div>
+            ))}
+          </div>
+        ) : filteredPlats.length === 0 ? (
+          <div className="text-center py-10 text-sm text-[#6B6B66]">
+            Aucun plat disponible dans cette catégorie pour le moment.
           </div>
         ) : (
-          <>
-            {/* Action "Continuer mes achats" */}
-            <div className="flex justify-between items-center">
-              <button
-                type="button"
-                onClick={onContinueShopping}
-                className="text-xs font-semibold text-[#C94F00] hover:underline flex items-center gap-1"
+          filteredPlats.map((plat) => {
+            const inCart = getQuantityInCart(plat.id);
+            return (
+              <div
+                key={plat.id}
+                className="bg-white rounded-2xl border border-[#E8E5DF] p-3.5 flex gap-3.5 items-center shadow-2xs hover:border-[#F26A00]/40 transition-colors"
               >
-                ← Continuer mes achats
-              </button>
-              <button
-                type="button"
-                onClick={clearCart}
-                className="text-xs text-[#6B6B66] hover:text-[#D64545] transition-colors"
-              >
-                Vider le panier
-              </button>
-            </div>
-
-            {/* Error banner */}
-            {error && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
-                {error}
-              </div>
-            )}
-
-            {/* Items list */}
-            <div className="flex flex-col gap-3">
-              {items.map((item) => (
-                <div
-                  key={item.plat.id}
-                  className="p-3.5 bg-white rounded-2xl border border-[#E8E5DF] flex items-center justify-between gap-3 shadow-2xs"
-                >
-                  <div className="flex items-center gap-3 grow min-w-0">
-                    <img
-                      src={item.plat.image_url || restaurant?.photo}
-                      alt={item.plat.nom}
-                      referrerPolicy="no-referrer"
-                      className="w-12 h-12 rounded-xl object-cover shrink-0 border border-[#E8E5DF]"
-                    />
-                    <div className="grow min-w-0">
-                      <h4 className="text-sm font-bold text-[#20201E] truncate">
-                        {item.plat.nom}
-                      </h4>
-                      <span className="text-xs font-semibold text-[#C94F00]">
-                        {(item.plat.prix * item.quantite).toFixed(2).replace('.', ',')} €
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Quantity controls */}
-                  <div className="flex items-center gap-2 bg-[#FFF8EE] rounded-xl px-2 py-1 border border-[#E8E5DF]">
-                    <button
-                      type="button"
-                      onClick={() => updateQuantity(item.plat.id, -1)}
-                      className="w-6 h-6 rounded-lg bg-white flex items-center justify-center text-[#20201E] hover:text-[#C94F00]"
-                      aria-label="Diminuer"
-                    >
-                      {item.quantite === 1 ? <Trash2 size={13} className="text-[#D64545]" /> : <Minus size={13} />}
-                    </button>
-                    <span className="text-xs font-bold text-[#20201E] w-4 text-center">
-                      {item.quantite}
+                {/* Dish Photo */}
+                <div className="relative w-20 h-20 rounded-xl bg-[#FFF1E5] shrink-0 overflow-hidden border border-[#E8E5DF]">
+                  <img
+                    src={plat.image_url || restaurant.photo}
+                    alt={plat.nom}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                  {inCart > 0 && (
+                    <span className="absolute top-1 left-1 bg-[#C94F00] text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border border-white">
+                      {inCart}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => updateQuantity(item.plat.id, 1)}
-                      className="w-6 h-6 rounded-lg bg-white flex items-center justify-center text-[#20201E] hover:text-[#C94F00]"
-                      aria-label="Augmenter"
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </div>
+                  )}
                 </div>
-              ))}
-            </div>
 
-            {/* + Ajouter autre chose */}
-            <button
-              type="button"
-              onClick={onContinueShopping}
-              className="py-2.5 px-4 rounded-xl border border-dashed border-[#E8E5DF] hover:border-[#F26A00] text-[#C94F00] text-xs font-semibold text-center bg-white/60 transition-colors"
-            >
-              + Ajouter autre chose chez {restaurant?.nom}
-            </button>
-
-            {/* CROSS-SELL : "Une petite douceur ?" */}
-            {crossSellDishes.length > 0 && (
-              <div className="pt-2">
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <Sparkles size={16} className="text-[#F26A00]" />
-                  <h3 className="text-sm font-bold text-[#20201E]">
-                    Une petite douceur pour compléter ?
-                  </h3>
+                {/* Dish details */}
+                <div className="grow min-w-0 flex flex-col gap-1">
+                  <b className="text-[15px] font-bold text-[#20201E] leading-tight truncate">
+                    {plat.nom}
+                  </b>
+                  <p className="text-[12px] text-[#6B6B66] line-clamp-2">
+                    {plat.description}
+                  </p>
+                  <span className="text-[14px] font-extrabold text-[#C94F00] mt-0.5">
+                    {plat.prix.toFixed(2).replace('.', ',')} €
+                  </span>
                 </div>
-                <div className="flex flex-col gap-2">
-                  {crossSellDishes.map((dish) => (
-                    <div
-                      key={dish.id}
-                      className="p-2.5 bg-[#FFF8EE] border border-[#F8D9BF] rounded-xl flex items-center justify-between gap-2.5"
-                    >
-                      <div className="flex items-center gap-2.5 grow min-w-0">
-                        <img
-                          src={dish.image_url || restaurant?.photo}
-                          alt={dish.nom}
-                          referrerPolicy="no-referrer"
-                          className="w-10 h-10 rounded-lg object-cover shrink-0 border border-[#E8E5DF]"
-                        />
-                        <div className="grow min-w-0">
-                          <p className="text-xs font-bold text-[#20201E] truncate">
-                            {dish.nom}
-                          </p>
-                          <span className="text-xs font-extrabold text-[#C94F00]">
-                            {dish.prix.toFixed(2).replace('.', ',')} €
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => addItem(dish, restaurant!)}
-                        className="px-3 py-1 bg-[#F26A00] hover:bg-[#C94F00] text-white text-xs font-bold rounded-lg shrink-0 transition-colors"
-                      >
-                        + Ajouter
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {/* Delivery address review */}
-            <div className="p-3 bg-white border border-[#E8E5DF] rounded-xl text-xs flex flex-col gap-1">
-              <span className="font-semibold text-[#20201E]">Adresse de livraison</span>
-              <p className="text-[#6B6B66]">
-                {currentUser?.adresse || '12 rue Oberkampf, 75011 Paris'}
-              </p>
-              {currentUser?.instructions_livraison && (
-                <p className="text-[#6B6B66] italic">
-                  Note : {currentUser.instructions_livraison}
-                </p>
-              )}
-            </div>
-
-            {/* Price breakdown */}
-            <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 flex flex-col gap-2 text-xs">
-              <div className="flex justify-between text-[#6B6B66]">
-                <span>Sous-total</span>
-                <span>{subtotal.toFixed(2).replace('.', ',')} €</span>
+                {/* Add button */}
+                <button
+                  type="button"
+                  onClick={() => handleAdd(plat)}
+                  className="w-10 h-10 rounded-full bg-[#FFF1E5] hover:bg-[#F26A00] text-[#C94F00] hover:text-white border border-[#F8D9BF] hover:border-[#F26A00] flex items-center justify-center shrink-0 transition-colors"
+                  aria-label={`Ajouter ${plat.nom}`}
+                >
+                  <Plus size={18} strokeWidth={2.5} />
+                </button>
               </div>
-              <div className="flex justify-between text-[#6B6B66]">
-                <span>Frais de livraison</span>
-                <span>{fraisLivraison.toFixed(2).replace('.', ',')} €</span>
-              </div>
-              <div className="flex justify-between text-[#6B6B66]">
-                <span>Frais de service</span>
-                <span>{fraisService.toFixed(2).replace('.', ',')} €</span>
-              </div>
-              <div className="border-t border-[#E8E5DF] pt-2 mt-1 flex justify-between text-sm font-extrabold text-[#20201E]">
-                <span>Total</span>
-                <span className="text-[#C94F00]">{total.toFixed(2).replace('.', ',')} €</span>
-              </div>
-            </div>
-
-            {/* Notice simulated payment */}
-            <div className="text-center text-[12px] text-[#6B6B66] bg-[#FFF8EE] border border-[#F8D9BF] p-2.5 rounded-xl">
-              💡 <b>Paiement simulé — aucun débit bancaire</b>. Votre commande sera immédiatement transmise à {restaurant?.nom}.
-            </div>
-          </>
+            );
+          })
         )}
       </div>
 
-      {/* Sticky Bottom Checkout Bar */}
-      {items.length > 0 && (
-        <div className="p-4 bg-white border-t border-[#E8E5DF] shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+      {/* Added Toast */}
+      {addedNotice && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-[#138A63] text-white px-4 py-2 rounded-full shadow-lg text-xs font-semibold flex items-center gap-1.5 animate-bounce">
+          <Check size={14} strokeWidth={2.5} />
+          <span>Ajouté : {addedNotice}</span>
+        </div>
+      )}
+
+      {/* Sticky Bottom Cart Bar */}
+      {itemCount > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 max-w-[480px] mx-auto p-4 bg-white/95 backdrop-blur-md border-t border-[#E8E5DF]">
           <button
             type="button"
-            disabled={isSubmitting}
-            onClick={handleCheckout}
-            className="w-full py-4 bg-[#F26A00] hover:bg-[#C94F00] text-white font-extrabold text-base rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.99] disabled:opacity-50"
+            onClick={onOpenCart}
+            className="w-full py-3.5 px-5 bg-[#F26A00] hover:bg-[#C94F00] text-white font-bold rounded-2xl flex items-center justify-between shadow-md transition-all active:scale-[0.99]"
           >
-            {isSubmitting ? (
-              <span>Transmission de la commande…</span>
-            ) : (
-              <span>Commander — {total.toFixed(2).replace('.', ',')} €</span>
-            )}
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-white text-[#C94F00] text-xs font-extrabold flex items-center justify-center">
+                {itemCount}
+              </span>
+              <span>Voir le panier</span>
+            </div>
+            <span className="text-base font-extrabold">
+              {total.toFixed(2).replace('.', ',')} €
+            </span>
           </button>
         </div>
       )}
