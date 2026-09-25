@@ -73,50 +73,66 @@ export class DataStore {
     return records;
   }
 
-  private async airtablePost(tableName: string, fields: Record<string, any>): Promise<any | null> {
+  // CORRECTION : si Airtable refuse une colonne (inconnue ou calculée : formule, lookup…),
+  // on retire cette colonne et on réessaie, au lieu de perdre tout l'enregistrement.
+  private getRejectedField(errorText: string): string | null {
+    const patterns = [
+      /Unknown field name: \\?"([^"\\]+)\\?"/,
+      /[Ff]ield \\?"([^"\\]+)\\?" cannot accept/,
+      /[Ff]ield \\?"([^"\\]+)\\?"/,
+      /for field \\?"?([A-Za-z0-9_]+)/
+    ];
+    for (const re of patterns) {
+      const m = errorText.match(re);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
+  private async airtableSend(method: 'POST' | 'PATCH', url: string, tableName: string, fields: Record<string, any>): Promise<any | null> {
     if (!this.airtablePat || !this.airtableBaseId) return null;
-    const url = `https://api.airtable.com/v0/${this.airtableBaseId}/${encodeURIComponent(tableName)}`;
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.airtablePat}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ fields, typecast: true })
-      });
-      if (!res.ok) {
-        console.error(`Airtable POST error on ${tableName}:`, res.status, await res.text());
+    const body: Record<string, any> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (v !== undefined) body[k] = v;
+    }
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${this.airtablePat}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ fields: body, typecast: true })
+        });
+        if (res.ok) return await res.json();
+
+        const text = await res.text();
+        const rejected = this.getRejectedField(text);
+        if (res.status === 422 && rejected && rejected in body) {
+          console.warn(`⚠️ Airtable ${method} ${tableName} : colonne "${rejected}" refusée, nouvel essai sans elle.`);
+          delete body[rejected];
+          continue;
+        }
+        console.error(`Airtable ${method} error on ${tableName}:`, res.status, text);
+        return null;
+      } catch (err) {
+        console.error(`Airtable ${method} network error on ${tableName}:`, err);
         return null;
       }
-      return await res.json();
-    } catch (err) {
-      console.error(`Airtable POST network error on ${tableName}:`, err);
-      return null;
     }
+    return null;
+  }
+
+  private async airtablePost(tableName: string, fields: Record<string, any>): Promise<any | null> {
+    const url = `https://api.airtable.com/v0/${this.airtableBaseId}/${encodeURIComponent(tableName)}`;
+    return this.airtableSend('POST', url, tableName, fields);
   }
 
   private async airtablePatch(tableName: string, recordId: string, fields: Record<string, any>): Promise<any | null> {
-    if (!this.airtablePat || !this.airtableBaseId) return null;
     const url = `https://api.airtable.com/v0/${this.airtableBaseId}/${encodeURIComponent(tableName)}/${recordId}`;
-    try {
-      const res = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${this.airtablePat}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ fields, typecast: true })
-      });
-      if (!res.ok) {
-        console.error(`Airtable PATCH error on ${tableName}:`, res.status, await res.text());
-        return null;
-      }
-      return await res.json();
-    } catch (err) {
-      console.error(`Airtable PATCH network error on ${tableName}:`, err);
-      return null;
-    }
+    return this.airtableSend('PATCH', url, tableName, fields);
   }
 
   // --- Initial Data Load from Airtable ---
@@ -646,8 +662,8 @@ export class DataStore {
       temps_livraison_max: (rest.delai_min || 20) + 15,
       disponible_commandes: rest.disponible ? 'Oui' : 'Non',
       statut_affiche: 'Ouvert',
-      restaurateur_id: owner?.airtableRecordId ? [owner.airtableRecordId] : undefined,
-      restaurateur_email: owner?.email
+      restaurateur_id: owner?.airtableRecordId ? [owner.airtableRecordId] : undefined
+      // restaurateur_email n'est pas envoyé : c'est un champ calculé (lookup) dans Airtable
     }).then(res => {
       if (res?.id) rest.airtableRecordId = res.id;
     }).catch(err => console.error('Error creating restaurant in Airtable:', err));
@@ -684,8 +700,8 @@ export class DataStore {
       temps_livraison_max: (rest.delai_min || 20) + 15,
       disponible_commandes: rest.disponible ? 'Oui' : 'Non',
       statut_affiche: 'Ouvert',
-      restaurateur_id: owner?.airtableRecordId ? [owner.airtableRecordId] : undefined,
-      restaurateur_email: owner?.email
+      restaurateur_id: owner?.airtableRecordId ? [owner.airtableRecordId] : undefined
+      // restaurateur_email n'est pas envoyé : c'est un champ calculé (lookup) dans Airtable
     });
     if (res?.id) rest.airtableRecordId = res.id;
     return rest;
