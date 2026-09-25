@@ -135,6 +135,8 @@ export interface MissionLivraison {
   instructions_livraison?: string;
   statut_commande?: StatutCommande;
   temps_preparation_min?: number;
+  client_telephone?: string;
+  lignes?: LigneCommande[];
 }
 
 export interface Signalement {
