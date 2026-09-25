@@ -162,9 +162,8 @@ export class DataStore {
 
         const role = (r.fields.role as any) || 'Client';
         const isClient = role === 'Client';
-        const defaultAddr = isClient ? '24 rue Daguerre' : (r.fields.adresse || '10 rue Oberkampf');
-        const defaultPostal = '75014';
-        const defaultCity = 'Paris';
+        // CORRECTION : on lit le vrai statut, et on traite "Validé" comme "Accepté"
+        const rawStatut = r.fields.statut_validation === 'Validé' ? 'Accepté' : r.fields.statut_validation;
 
         return {
           id: uid,
@@ -174,15 +173,16 @@ export class DataStore {
           email: r.fields.email || '',
           telephone: r.fields.telephone || '',
           role,
-          adresse: defaultAddr,
-          code_postal: defaultPostal,
-          ville: defaultCity,
-          instructions_livraison: "Sonner à l'interphone",
+          // CORRECTION : on lit la vraie adresse d'Airtable (elle contient déjà code postal et ville)
+          adresse: r.fields.adresse || '',
+          code_postal: '',
+          ville: '',
+          instructions_livraison: r.fields.instructions_livraison || '',
           compte_actif: r.fields.compte_actif === 'Oui' || r.fields.compte_actif === true,
-          statut_validation: (r.fields.statut_validation as any) || (isClient ? 'Non requis' : 'Accepté'),
-          disponible_livraison: role === 'Livreur' ? true : undefined,
-          moyen_deplacement: r.fields.moyen_deplacement || (role === 'Livreur' ? 'Vélo' : undefined),
-          zone_livraison: r.fields.zone_livraison || (role === 'Livreur' ? 'Paris 14e' : undefined),
+          statut_validation: (rawStatut as any) || (isClient ? 'Non requis' : 'En attente'),
+          disponible_livraison: role === 'Livreur' ? (r.fields.disponible_livraison === 'Oui' || r.fields.disponible_livraison === true) : undefined,
+          moyen_deplacement: r.fields.moyen_deplacement || undefined,
+          zone_livraison: r.fields.zone_livraison || undefined,
           motif_decision: r.fields.motif_decision,
           valide_par: r.fields.valide_par_id,
           date_decision: r.fields.date_decision
@@ -229,7 +229,8 @@ export class DataStore {
           couleur: '#FFF1E5',
           photo: r.fields.image_url || 'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1200&q=80',
           disponible: r.fields.disponible_commandes === 'Oui' || r.fields.disponible_commandes === true,
-          statut_validation: 'Accepté',
+          // CORRECTION : le restaurant suit le statut de validation de son restaurateur
+          statut_validation: (users.find(u => u.id === ownerId)?.statut_validation as any) || 'Accepté',
           note: Number(r.fields.note) || 4.7,
           nb_avis: Number(r.fields.nb_avis) || 150
         };
@@ -542,6 +543,46 @@ export class DataStore {
     return user;
   }
 
+  // CORRECTION : création d'utilisateur qui ATTEND la réponse d'Airtable,
+  // envoie l'adresse complète, et évite les numéros USR en double.
+  async createUserAsync(userData: Omit<Utilisateur, 'id'>): Promise<Utilisateur> {
+    let maxNum = 0;
+    for (const u of this.data.utilisateurs) {
+      const num = parseInt(String(u.id).replace(/\D/g, ''), 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+    const id = `USR-${String(maxNum + 1).padStart(3, '0')}`;
+    const adresseComplete = [userData.adresse, [userData.code_postal, userData.ville].filter(Boolean).join(' ')]
+      .filter(Boolean).join(', ');
+    const user: Utilisateur & { airtableRecordId?: string } = {
+      id,
+      ...userData,
+      adresse: adresseComplete,
+      code_postal: '',
+      ville: ''
+    };
+    this.data.utilisateurs.push(user);
+
+    const res = await this.airtablePost('Utilisateurs', {
+      utilisateur_id: id,
+      prenom: user.prenom,
+      nom: user.nom,
+      nom_complet: `${user.prenom} ${user.nom}`,
+      email: user.email,
+      telephone: user.telephone,
+      adresse: adresseComplete,
+      role: user.role,
+      compte_actif: user.compte_actif ? 'Oui' : 'Non',
+      statut_validation: user.statut_validation,
+      moyen_deplacement: user.moyen_deplacement,
+      zone_livraison: user.zone_livraison,
+      disponible_livraison: user.role === 'Livreur' ? 'Non' : undefined,
+      date_creation: new Date().toISOString()
+    });
+    if (res?.id) user.airtableRecordId = res.id;
+    return user;
+  }
+
   updateUser(id: string, updates: Partial<Utilisateur>): Utilisateur | undefined {
     const user = this.data.utilisateurs.find(u => u.id === id);
     if (!user) return undefined;
@@ -555,6 +596,7 @@ export class DataStore {
       if (updates.motif_decision) airtableFields.motif_decision = updates.motif_decision;
       if (updates.valide_par) airtableFields.valide_par_id = updates.valide_par;
       if (updates.date_decision) airtableFields.date_decision = updates.date_decision;
+      if (updates.disponible_livraison !== undefined) airtableFields.disponible_livraison = updates.disponible_livraison ? 'Oui' : 'Non';
 
       if (Object.keys(airtableFields).length > 0) {
         this.airtablePatch('Utilisateurs', user.airtableRecordId, airtableFields)
@@ -610,6 +652,42 @@ export class DataStore {
       if (res?.id) rest.airtableRecordId = res.id;
     }).catch(err => console.error('Error creating restaurant in Airtable:', err));
 
+    return rest;
+  }
+
+  // CORRECTION : création de restaurant qui ATTEND Airtable, avec le lien vers le restaurateur
+  async createRestaurantAsync(restData: Omit<Restaurant, 'id'>): Promise<Restaurant> {
+    let maxNum = 0;
+    for (const r of this.data.restaurants) {
+      const num = parseInt(String(r.id).replace(/\D/g, ''), 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+    const id = `RST-${String(maxNum + 1).padStart(3, '0')}`;
+    const rest: Restaurant & { airtableRecordId?: string } = { id, ...restData };
+    this.data.restaurants.push(rest);
+
+    const owner = this.data.utilisateurs.find(u => u.id === restData.proprietaire_id);
+    const adresseComplete = [rest.adresse, [rest.code_postal, rest.ville].filter(Boolean).join(' ')]
+      .filter(Boolean).join(', ');
+
+    const res = await this.airtablePost('Restaurants', {
+      restaurant_id: id,
+      nom_restaurant: rest.nom,
+      type_cuisine: rest.cuisine,
+      description: rest.description,
+      adresse: adresseComplete,
+      code_postal: Number(rest.code_postal) || undefined,
+      ville: rest.ville,
+      quartier: rest.quartier,
+      frais_livraison: rest.frais_livraison,
+      temps_livraison_min: rest.delai_min || 20,
+      temps_livraison_max: (rest.delai_min || 20) + 15,
+      disponible_commandes: rest.disponible ? 'Oui' : 'Non',
+      statut_affiche: 'Ouvert',
+      restaurateur_id: owner?.airtableRecordId ? [owner.airtableRecordId] : undefined,
+      restaurateur_email: owner?.email
+    });
+    if (res?.id) rest.airtableRecordId = res.id;
     return rest;
   }
 
@@ -690,7 +768,11 @@ export class DataStore {
 
   // --- Commandes ---
   getOrders(): Commande[] {
-    return this.data.commandes.map(c => this.enrichOrder(c));
+    // CORRECTION : commandes triées de la plus récente à la plus ancienne
+    return this.data.commandes
+      .slice()
+      .sort((a, b) => new Date(b.cree_a).getTime() - new Date(a.cree_a).getTime())
+      .map(c => this.enrichOrder(c));
   }
 
   getOrdersByClient(clientId: string): Commande[] {
