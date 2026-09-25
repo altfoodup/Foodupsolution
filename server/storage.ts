@@ -1363,7 +1363,8 @@ export class DataStore {
     return {
       ...m,
       restaurant_nom: restaurant?.nom || 'Restaurant',
-      restaurant_adresse: restaurant ? `${restaurant.adresse}, ${restaurant.code_postal} ${restaurant.ville}` : undefined,
+      restaurant_adresse: restaurant ? `${restaurant.adresse}` : undefined,
+      //restaurant_adresse: restaurant ? `${restaurant.adresse}, ${restaurant.code_postal} ${restaurant.ville}` : undefined,
       adresse_retrait: restaurant ? `${restaurant.adresse}, ${restaurant.code_postal} ${restaurant.ville}` : undefined,
       adresse_livraison: order?.adresse_livraison,
       client_nom: client ? `${client.prenom} ${client.nom}` : 'Client',
