@@ -951,6 +951,11 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`FoodUp server running on port ${PORT}`);
   });
+
+  // Recharge automatiquement les données Airtable toutes les 60 secondes
+  setInterval(() => {
+    db.init();
+  }, 60 * 1000);
 }
 
 startServer();
