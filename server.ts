@@ -80,7 +80,7 @@ app.get('/api/auth/me', (req: Request, res: Response) => {
   res.json({ ...authUser, restaurant });
 });
 
-app.post('/api/auth/register', (req: Request, res: Response) => {
+app.post('/api/auth/register', async (req: Request, res: Response) => {
   const { 
     role, 
     prenom, 
@@ -118,7 +118,7 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
   // Livreur: 'En attente'
   const statut_validation = role === 'Client' ? 'Non requis' : 'En attente';
 
-  const user = db.createUser({
+  const user = await db.createUserAsync({
     prenom,
     nom,
     email,
@@ -137,7 +137,7 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
 
   let restaurant = null;
   if (role === 'Restaurateur') {
-    restaurant = db.createRestaurant({
+    restaurant = await db.createRestaurantAsync({
       nom: nom_restaurant || `Restaurant de ${prenom}`,
       proprietaire_id: user.id,
       cuisine: cuisine || 'Français',
@@ -184,7 +184,8 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
 // ==========================================
 
 app.get('/api/restaurants', (req: Request, res: Response) => {
-  const restaurants = db.getRestaurants();
+  // CORRECTION : le client ne voit que les restaurants validés par l'admin
+  const restaurants = db.getRestaurants().filter(r => r.statut_validation === 'Accepté');
   res.json(restaurants);
 });
 
