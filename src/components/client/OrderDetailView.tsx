@@ -221,8 +221,10 @@ export const OrderDetailView: React.FC<Props> = ({ orderId, onBack }) => {
 
           <div className="flex flex-col gap-4 relative">
             {stages.map((stage, idx) => {
-              const isPast = idx < currentStageIndex;
-              const isCurrent = idx === currentStageIndex;
+              // Une commande livrée est terminée : toutes les étapes passent au vert
+              const isDelivered = order.statut === 'Livrée';
+              const isPast = idx < currentStageIndex || (isDelivered && idx === currentStageIndex);
+              const isCurrent = idx === currentStageIndex && !isDelivered;
               const isFuture = idx > currentStageIndex;
 
               return (
