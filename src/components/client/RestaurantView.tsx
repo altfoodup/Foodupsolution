@@ -39,11 +39,18 @@ export const RestaurantView: React.FC<Props> = ({
     }
   };
 
-  // Ordre d'affichage des catégories : entrées, plats, desserts, boissons, puis les autres
-  const CATEGORY_ORDER = ['Entrées', 'Entrée', 'Plats', 'Plat', 'Desserts', 'Dessert', 'Boissons', 'Boisson'];
+  // Ordre d'affichage : entrées, plats, desserts, boissons, puis le reste.
+  // On compare sans majuscules ni accents, et sur le début du mot,
+  // pour reconnaître aussi "Entrée", "Plat principal", "dessert", etc.
+  const normalize = (c: string) =>
+    (c || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const categoryRank = (c: string) => {
-    const i = CATEGORY_ORDER.indexOf(c);
-    return i === -1 ? CATEGORY_ORDER.length : i;
+    const n = normalize(c);
+    if (n.startsWith('entree')) return 0;
+    if (n.startsWith('plat')) return 1;
+    if (n.startsWith('dessert')) return 2;
+    if (n.startsWith('boisson')) return 3;
+    return 4;
   };
 
   const categories = ['Tout', ...Array.from(new Set(plats.map(p => p.categorie)))
