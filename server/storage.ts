@@ -20,6 +20,19 @@ interface DatabaseSchema {
   historique_actions: (HistoriqueAction & { airtableRecordId?: string })[];
 }
 
+// Règles de frais FoodUp (identiques partout)
+export const FRAIS_LIVRAISON = 5;   // payés par le client
+export const FRAIS_SERVICE = 1;     // frais de service FoodUp
+
+// Rémunération du livreur : 3 € fixe + 10 % du montant total de la commande
+export const REMUNERATION_FIXE = 3;
+export const REMUNERATION_POURCENTAGE = 0.10;
+export const calculerRemunerationLivreur = (totalCommande: number): number =>
+  Number((REMUNERATION_FIXE + REMUNERATION_POURCENTAGE * (Number(totalCommande) || 0)).toFixed(2));
+
+// Un lien de photo n'est gardé que s'il commence par http
+const isUrl = (v: any) => typeof v === 'string' && /^https?:\/\//.test(v.trim());
+
 export class DataStore {
   private data: DatabaseSchema = {
     utilisateurs: [],
@@ -201,7 +214,8 @@ export class DataStore {
           zone_livraison: r.fields.zone_livraison || undefined,
           motif_decision: r.fields.motif_decision,
           valide_par: r.fields.valide_par_id,
-          date_decision: r.fields.date_decision
+          date_decision: r.fields.date_decision,
+          photo_url: r.fields.photo_url || undefined
         };
       });
 
@@ -240,8 +254,9 @@ export class DataStore {
           quartier: r.fields.quartier || 'Plaisance',
           delai: `${delaiMin}–${delaiMax} min`,
           delai_min: delaiMin,
-          frais_livraison: Number(r.fields.frais_livraison) || 2.90,
-          frais_service: 1.00,
+          // Frais fixés par FoodUp
+          frais_livraison: FRAIS_LIVRAISON,
+          frais_service: FRAIS_SERVICE,
           couleur: '#FFF1E5',
           photo: r.fields.image_url || 'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1200&q=80',
           disponible: r.fields.disponible_commandes === 'Oui' || r.fields.disponible_commandes === true,
@@ -270,7 +285,8 @@ export class DataStore {
           prix: Number(r.fields.prix) || 12.0,
           image_url: r.fields.image_url || 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=80',
           categorie: r.fields.categorie || 'Plats',
-          disponible: r.fields.disponible === 'Oui' || r.fields.disponible === true
+          disponible: r.fields.disponible === 'Oui' || r.fields.disponible === true,
+          plat_du_jour: r.fields.plat_du_jour === true || r.fields.plat_du_jour === 'Oui'
         };
       });
 
@@ -368,7 +384,8 @@ export class DataStore {
           restaurant_id: linkedOrder?.restaurant_id || 'RST-005',
           livreur_id: r.fields.livreur_id || undefined,
           statut: r.fields.statut || 'Disponible',
-          remuneration_annoncee: Number(r.fields.remuneration_annoncee) || 5.50,
+          // Rémunération du livreur : 3 € + 10 % du total de la commande
+          remuneration_annoncee: linkedOrder ? calculerRemunerationLivreur(linkedOrder.total) : (Number(r.fields.remuneration_annoncee) || REMUNERATION_FIXE),
           date_attribution: r.fields.date_attribution,
           date_retrait: r.fields.date_retrait,
           date_livraison: r.fields.date_livraison
@@ -593,6 +610,7 @@ export class DataStore {
       moyen_deplacement: user.moyen_deplacement,
       zone_livraison: user.zone_livraison,
       disponible_livraison: user.role === 'Livreur' ? 'Non' : undefined,
+      photo_url: isUrl(user.photo_url) ? user.photo_url : undefined,
       date_creation: new Date().toISOString()
     });
     if (res?.id) user.airtableRecordId = res.id;
@@ -695,11 +713,12 @@ export class DataStore {
       code_postal: Number(rest.code_postal) || undefined,
       ville: rest.ville,
       quartier: rest.quartier,
-      frais_livraison: rest.frais_livraison,
+      frais_livraison: FRAIS_LIVRAISON,
       temps_livraison_min: rest.delai_min || 20,
       temps_livraison_max: (rest.delai_min || 20) + 15,
       disponible_commandes: rest.disponible ? 'Oui' : 'Non',
       statut_affiche: 'Ouvert',
+      image_url: isUrl(rest.photo) ? rest.photo : undefined,
       restaurateur_id: owner?.airtableRecordId ? [owner.airtableRecordId] : undefined
       // restaurateur_email n'est pas envoyé : c'est un champ calculé (lookup) dans Airtable
     });
@@ -752,7 +771,9 @@ export class DataStore {
       description: dish.description,
       prix: dish.prix,
       categorie: dish.categorie,
-      disponible: dish.disponible ? 'Oui' : 'Non'
+      disponible: dish.disponible ? 'Oui' : 'Non',
+      image_url: isUrl(dish.image_url) ? dish.image_url : undefined,
+      plat_du_jour: dish.plat_du_jour ? true : undefined
     }).then(res => {
       if (res?.id) dish.airtableRecordId = res.id;
     }).catch(err => console.error('Error creating dish in Airtable:', err));
@@ -772,6 +793,8 @@ export class DataStore {
       if (updates.description !== undefined) airtableFields.description = updates.description;
       if (updates.prix !== undefined) airtableFields.prix = updates.prix;
       if (updates.categorie) airtableFields.categorie = updates.categorie;
+      if (updates.image_url !== undefined && isUrl(updates.image_url)) airtableFields.image_url = updates.image_url;
+      if (updates.plat_du_jour !== undefined) airtableFields.plat_du_jour = !!updates.plat_du_jour;
 
       if (Object.keys(airtableFields).length > 0) {
         this.airtablePatch('Plats', dish.airtableRecordId, airtableFields)
@@ -1250,7 +1273,7 @@ export class DataStore {
               restaurant_id: linkedOrder?.restaurant_id || 'RST-003',
               livreur_id: undefined,
               statut: 'Disponible',
-              remuneration_annoncee: Number(r.fields.remuneration_annoncee) || 5.5,
+              remuneration_annoncee: linkedOrder ? calculerRemunerationLivreur(linkedOrder.total) : (Number(r.fields.remuneration_annoncee) || REMUNERATION_FIXE),
               date_attribution: undefined,
               date_retrait: undefined,
               date_livraison: undefined
