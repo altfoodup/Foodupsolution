@@ -746,33 +746,39 @@ app.get('/api/courier/earnings', (req: Request, res: Response) => {
   }
 
   const missions = db.getMissionsByCourier(authUser.id).filter(m => m.statut === 'Terminée');
+  // Dates comparées à l'heure de Paris (AAAA-MM-JJ)
+  const jourParis = (d: Date) => d.toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
-  const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+  const aujourdhui = jourParis(now);
+  const moisEnCours = aujourdhui.slice(0, 7);
+  // 7 derniers jours = aujourd'hui + les 6 jours précédents
+  const debut7Jours = jourParis(new Date(now.getTime() - 6 * 24 * 3600 * 1000));
 
-  let gainsJour = 0;
-  let gainsSemaine = 0;
-  let gainsMois = 0;
+  let gainsJour = 0, gainsSemaine = 0, gainsMois = 0;
+  let coursesJour = 0, coursesSemaine = 0, coursesMois = 0;
 
   for (const m of missions) {
-    const d = m.date_livraison ? new Date(m.date_livraison) : new Date();
-    const amount = m.remuneration_annoncee || 0;
-    if (d.toISOString().slice(0, 10) === todayStr) {
-      gainsJour += amount;
-    }
-    if (d >= oneWeekAgo) {
-      gainsSemaine += amount;
-    }
-    if (d >= oneMonthAgo) {
-      gainsMois += amount;
-    }
+    const amount = Number(m.remuneration_annoncee) || 0;
+    // Date de référence : date de livraison ; sinon date de la commande (jamais « aujourd'hui » par défaut)
+    const order = db.getOrderById(m.commande_id);
+    const dateRef = m.date_livraison || order?.mise_a_jour_a || order?.cree_a;
+    if (!dateRef) continue;
+    const d = new Date(dateRef);
+    if (isNaN(d.getTime())) continue;
+    const jour = jourParis(d);
+
+    if (jour === aujourdhui) { gainsJour += amount; coursesJour++; }
+    if (jour >= debut7Jours && jour <= aujourdhui) { gainsSemaine += amount; coursesSemaine++; }
+    if (jour.slice(0, 7) === moisEnCours) { gainsMois += amount; coursesMois++; }
   }
 
   res.json({
     gainsJour: Number(gainsJour.toFixed(2)),
     gainsSemaine: Number(gainsSemaine.toFixed(2)),
     gainsMois: Number(gainsMois.toFixed(2)),
+    coursesJour,
+    coursesSemaine,
+    coursesMois,
     nombreMissionsTerminees: missions.length
   });
 });
