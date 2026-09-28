@@ -116,7 +116,7 @@ export const RestaurantView: React.FC<Props> = ({
         </div>
         <div className="flex items-center gap-1.5">
           <Bike size={15} className="text-[#F26A00]" />
-          <span>Livraison {restaurant.frais_livraison.toFixed(2).replace('.', ',')} €</span>
+          <span>Livraison dès {restaurant.frais_livraison.toFixed(2).replace('.', ',')} €</span>
         </div>
         <span className="text-[#6B6B66]">{restaurant.quartier}</span>
       </div>
