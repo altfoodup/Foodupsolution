@@ -751,11 +751,12 @@ app.get('/api/courier/earnings', (req: Request, res: Response) => {
   const now = new Date();
   const aujourdhui = jourParis(now);
   const moisEnCours = aujourdhui.slice(0, 7);
+  const anneeEnCours = aujourdhui.slice(0, 4);
   // 7 derniers jours = aujourd'hui + les 6 jours précédents
   const debut7Jours = jourParis(new Date(now.getTime() - 6 * 24 * 3600 * 1000));
 
-  let gainsJour = 0, gainsSemaine = 0, gainsMois = 0;
-  let coursesJour = 0, coursesSemaine = 0, coursesMois = 0;
+  let gainsJour = 0, gainsSemaine = 0, gainsMois = 0, gainsAnnee = 0;
+  let coursesJour = 0, coursesSemaine = 0, coursesMois = 0, coursesAnnee = 0;
 
   for (const m of missions) {
     const amount = Number(m.remuneration_annoncee) || 0;
@@ -770,15 +771,18 @@ app.get('/api/courier/earnings', (req: Request, res: Response) => {
     if (jour === aujourdhui) { gainsJour += amount; coursesJour++; }
     if (jour >= debut7Jours && jour <= aujourdhui) { gainsSemaine += amount; coursesSemaine++; }
     if (jour.slice(0, 7) === moisEnCours) { gainsMois += amount; coursesMois++; }
+    if (jour.slice(0, 4) === anneeEnCours) { gainsAnnee += amount; coursesAnnee++; }
   }
 
   res.json({
     gainsJour: Number(gainsJour.toFixed(2)),
     gainsSemaine: Number(gainsSemaine.toFixed(2)),
     gainsMois: Number(gainsMois.toFixed(2)),
+    gainsAnnee: Number(gainsAnnee.toFixed(2)),
     coursesJour,
     coursesSemaine,
     coursesMois,
+    coursesAnnee,
     nombreMissionsTerminees: missions.length
   });
 });
