@@ -29,6 +29,9 @@ export const LivreurApp: React.FC = () => {
     gainsJour: 0,
     gainsSemaine: 0,
     gainsMois: 0,
+    coursesJour: 0,
+    coursesSemaine: 0,
+    coursesMois: 0,
     nombreMissionsTerminees: 0
   });
 
@@ -490,11 +493,12 @@ export const LivreurApp: React.FC = () => {
               <div>
                 <span className="text-xs text-[#6B6B66]">Gains aujourd'hui</span>
                 <p className="text-2xl font-extrabold text-[#138A63]">
-                  {earnings.gainsJour.toFixed(2).replace('.', ',')} €
+                  {(earnings.gainsJour || 0).toFixed(2).replace('.', ',')} €
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-[#E7F4EE] text-[#138A63] flex items-center justify-center font-bold">
-                €
+              <div className="text-right">
+                <p className="text-2xl font-extrabold text-[#20201E]">{earnings.coursesJour || 0}</p>
+                <span className="text-xs text-[#6B6B66]">{(earnings.coursesJour || 0) > 1 ? 'courses' : 'course'}</span>
               </div>
             </div>
 
@@ -502,8 +506,12 @@ export const LivreurApp: React.FC = () => {
               <div>
                 <span className="text-xs text-[#6B6B66]">7 derniers jours</span>
                 <p className="text-2xl font-extrabold text-[#20201E]">
-                  {earnings.gainsSemaine.toFixed(2).replace('.', ',')} €
+                  {(earnings.gainsSemaine || 0).toFixed(2).replace('.', ',')} €
                 </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-extrabold text-[#20201E]">{earnings.coursesSemaine || 0}</p>
+                <span className="text-xs text-[#6B6B66]">{(earnings.coursesSemaine || 0) > 1 ? 'courses' : 'course'}</span>
               </div>
             </div>
 
@@ -511,17 +519,12 @@ export const LivreurApp: React.FC = () => {
               <div>
                 <span className="text-xs text-[#6B6B66]">Mois en cours</span>
                 <p className="text-2xl font-extrabold text-[#20201E]">
-                  {earnings.gainsMois.toFixed(2).replace('.', ',')} €
+                  {(earnings.gainsMois || 0).toFixed(2).replace('.', ',')} €
                 </p>
               </div>
-            </div>
-
-            <div className="p-4 bg-white rounded-2xl border border-[#E8E5DF] flex items-center justify-between">
-              <div>
-                <span className="text-xs text-[#6B6B66]">Courses terminées</span>
-                <p className="text-xl font-bold text-[#20201E]">
-                  {earnings.nombreMissionsTerminees}
-                </p>
+              <div className="text-right">
+                <p className="text-2xl font-extrabold text-[#20201E]">{earnings.coursesMois || 0}</p>
+                <span className="text-xs text-[#6B6B66]">{(earnings.coursesMois || 0) > 1 ? 'courses' : 'course'}</span>
               </div>
             </div>
           </div>
