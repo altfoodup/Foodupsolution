@@ -284,7 +284,14 @@ export const CartModal: React.FC<Props> = ({
                 <span>{subtotal.toFixed(2).replace('.', ',')} €</span>
               </div>
               <div className="flex justify-between text-[#6B6B66]">
-                <span>Frais de livraison</span>
+                <span>
+                  Frais de livraison
+                  {restaurant && (
+                    <span className="block text-[10px]">
+                      {(restaurant.frais_livraison || 5).toFixed(2).replace('.', ',')} € + 10 % des plats
+                    </span>
+                  )}
+                </span>
                 <span>{fraisLivraison.toFixed(2).replace('.', ',')} €</span>
               </div>
               <div className="flex justify-between text-[#6B6B66]">
