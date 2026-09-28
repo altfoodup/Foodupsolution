@@ -413,7 +413,7 @@ app.post('/api/orders/:id/accept', async (req: Request, res: Response) => {
       restaurant_id: order.restaurant_id,
       statut: 'Disponible',
       // Rémunération du livreur : 3 € + 10 % du total de la commande
-      remuneration_annoncee: calculerRemunerationLivreur(order.total),
+      remuneration_annoncee: calculerRemunerationLivreur(order.frais_livraison),
     });
   }
 
