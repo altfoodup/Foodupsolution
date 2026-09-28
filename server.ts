@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import { db } from './server/storage.js';
+import { db, FRAIS_LIVRAISON, FRAIS_SERVICE, calculerRemunerationLivreur } from './server/storage.js';
 
 dotenv.config();
 
@@ -100,7 +100,9 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     description_restaurant,
     quartier,
     delai,
-    frais_livraison
+    photo_url,          // lien photo du livreur
+    photo_restaurant,   // lien photo du restaurant
+    plats               // plats saisis à l'inscription
   } = req.body;
 
   if (!prenom || !nom || !email || !role) {
@@ -133,6 +135,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     disponible_livraison: role === 'Livreur' ? false : undefined,
     moyen_deplacement: role === 'Livreur' ? (moyen_deplacement || 'Vélo') : undefined,
     zone_livraison: role === 'Livreur' ? (zone_livraison || 'Paris Centre') : undefined,
+    photo_url: role === 'Livreur' ? (photo_url || undefined) : undefined,
   });
 
   let restaurant = null;
@@ -148,25 +151,38 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
       quartier: quartier || 'Oberkampf',
       delai: delai || '20–30 min',
       delai_min: 25,
-      frais_livraison: Number(frais_livraison) || 2.50,
-      frais_service: 0.90,
+      frais_livraison: FRAIS_LIVRAISON,
+      frais_service: FRAIS_SERVICE,
       couleur: '#FFF1E5',
-      photo: '/src/assets/images/foodup_trattoria_pasta_1790144540478.jpg',
+      photo: (typeof photo_restaurant === 'string' && /^https?:\/\//.test(photo_restaurant.trim()))
+        ? photo_restaurant.trim()
+        : 'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1200&q=80',
       disponible: true,
       statut_validation: 'En attente',
       horaires: '12:00 - 14:30 · 19:00 - 22:30'
     });
 
-    // Add a default dish
-    db.createDish({
-      restaurant_id: restaurant.id,
-      nom: 'Plat du jour maison',
-      description: 'Préparé chaque matin par le chef selon arrivage du marché.',
-      prix: 14.50,
-      image_url: '/src/assets/images/foodup_trattoria_pasta_1790144540478.jpg',
-      categorie: 'Plats',
-      disponible: true
-    });
+    // Plats saisis par le restaurateur à l'inscription (plus de plat automatique)
+    if (Array.isArray(plats)) {
+      let platDuJourDejaChoisi = false;
+      for (const p of plats) {
+        if (!p || !p.nom || p.prix === undefined || p.prix === '') continue;
+        const estPlatDuJour = !!p.plat_du_jour && !platDuJourDejaChoisi;
+        if (estPlatDuJour) platDuJourDejaChoisi = true;
+        db.createDish({
+          restaurant_id: restaurant.id,
+          nom: String(p.nom),
+          description: String(p.description || ''),
+          prix: Number(String(p.prix).replace(',', '.')) || 0,
+          image_url: (typeof p.image_url === 'string' && /^https?:\/\//.test(p.image_url.trim()))
+            ? p.image_url.trim()
+            : restaurant.photo,
+          categorie: p.categorie || 'Plats',
+          disponible: true,
+          plat_du_jour: estPlatDuJour
+        });
+      }
+    }
   }
 
   // Audit event
@@ -209,7 +225,7 @@ app.post('/api/dishes', (req: Request, res: Response) => {
     return res.status(403).json({ error: 'Action réservée aux restaurateurs.' });
   }
 
-  const { restaurant_id, nom, description, prix, categorie, image_url, disponible } = req.body;
+  const { restaurant_id, nom, description, prix, categorie, image_url, disponible, plat_du_jour } = req.body;
   if (!restaurant_id || !nom || prix === undefined) {
     return res.status(400).json({ error: 'Champs nom, prix et restaurant_id obligatoires.' });
   }
@@ -231,7 +247,15 @@ app.post('/api/dishes', (req: Request, res: Response) => {
     image_url: image_url || restaurant.photo,
     categorie: categorie || 'Plats',
     disponible: disponible !== false,
+    plat_du_jour: !!plat_du_jour,
   });
+
+  // Un seul plat du jour par restaurant : on retire l'étiquette des autres
+  if (plat_du_jour) {
+    for (const other of db.getDishesByRestaurant(restaurant_id)) {
+      if (other.id !== dish.id && other.plat_du_jour) db.updateDish(other.id, { plat_du_jour: false });
+    }
+  }
 
   db.createHistoryEvent({
     acteur_id: authUser.id,
@@ -259,6 +283,13 @@ app.put('/api/dishes/:id', (req: Request, res: Response) => {
   }
 
   const updated = db.updateDish(dish.id, req.body);
+
+  // Un seul plat du jour par restaurant : on retire l'étiquette des autres
+  if (req.body.plat_du_jour) {
+    for (const other of db.getDishesByRestaurant(dish.restaurant_id)) {
+      if (other.id !== dish.id && other.plat_du_jour) db.updateDish(other.id, { plat_du_jour: false });
+    }
+  }
   res.json(updated);
 });
 
@@ -381,7 +412,8 @@ app.post('/api/orders/:id/accept', async (req: Request, res: Response) => {
       commande_id: order.id,
       restaurant_id: order.restaurant_id,
       statut: 'Disponible',
-      remuneration_annoncee: Number((4.50 + (restaurant.frais_livraison * 0.4)).toFixed(2)),
+      // Rémunération du livreur : 3 € + 10 % du total de la commande
+      remuneration_annoncee: calculerRemunerationLivreur(order.total),
     });
   }
 
