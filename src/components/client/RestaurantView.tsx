@@ -58,7 +58,11 @@ export const RestaurantView: React.FC<Props> = ({
 
   const filteredPlats = plats
     .filter(p => selectedCategory === 'Tout' || p.categorie === selectedCategory)
-    .sort((a, b) => categoryRank(a.categorie) - categoryRank(b.categorie));
+    .sort((a, b) => {
+      // Le plat du jour passe toujours en premier
+      if (!!a.plat_du_jour !== !!b.plat_du_jour) return a.plat_du_jour ? -1 : 1;
+      return categoryRank(a.categorie) - categoryRank(b.categorie);
+    });
 
   const handleAdd = (plat: Plat) => {
     addItem(plat, restaurant);
@@ -160,7 +164,7 @@ export const RestaurantView: React.FC<Props> = ({
             return (
               <div
                 key={plat.id}
-                className="bg-white rounded-2xl border border-[#E8E5DF] p-3.5 flex gap-3.5 items-center shadow-2xs hover:border-[#F26A00]/40 transition-colors"
+                className={`bg-white rounded-2xl border p-3.5 flex gap-3.5 items-center shadow-2xs hover:border-[#F26A00]/40 transition-colors ${plat.plat_du_jour ? 'border-[#F26A00]' : 'border-[#E8E5DF]'}`}
               >
                 {/* Dish Photo */}
                 <div className="relative w-20 h-20 rounded-xl bg-[#FFF1E5] shrink-0 overflow-hidden border border-[#E8E5DF]">
@@ -179,6 +183,11 @@ export const RestaurantView: React.FC<Props> = ({
 
                 {/* Dish details */}
                 <div className="grow min-w-0 flex flex-col gap-1">
+                  {plat.plat_du_jour && (
+                    <span className="self-start text-[10px] px-2 py-0.5 rounded-full bg-[#F26A00] text-white font-bold">
+                      Plat du jour
+                    </span>
+                  )}
                   <b className="text-[15px] font-bold text-[#20201E] leading-tight truncate">
                     {plat.nom}
                   </b>
