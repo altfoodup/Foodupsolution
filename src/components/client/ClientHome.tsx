@@ -178,22 +178,22 @@ export const ClientHome: React.FC<Props> = ({
           </svg>
         </div>
 
-        /*<button type="button" className="grow flex flex-col items-start gap-0.5 border-none bg-transparent p-0 text-left text-[#20201E] cursor-pointer">
+        <button type="button" className="grow flex flex-col items-start gap-0.5 border-none bg-transparent p-0 text-left text-[#20201E] cursor-pointer">
           <small className="text-[12px] font-medium text-[#6B6B66]">Livrer à</small>
           <strong className="flex items-center gap-1 text-[15px] font-bold text-[#20201E]">
             {userAddress || '12 rue Oberkampf'}
             <ChevronDown size={15} strokeWidth={2.2} />
           </strong>
-        </button>*/
+        </button>
 
-        <button 
+        {/*<button 
           type="button" 
           className="relative w-11 h-11 rounded-full border border-[#E8E5DF] bg-white text-[#20201E] flex items-center justify-center hover:bg-[#FFF8EE] transition-colors"
           aria-label="Notifications"
         >
           <Bell size={19} strokeWidth={1.8} />
           <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[#F26A00] border-2 border-white"></span>
-        </button>
+        </button>*/}
       </header>
 
       {/* ===== SALUTATION ===== */}
