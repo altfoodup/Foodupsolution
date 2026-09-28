@@ -178,13 +178,13 @@ export const ClientHome: React.FC<Props> = ({
           </svg>
         </div>
 
-        <button type="button" className="grow flex flex-col items-start gap-0.5 border-none bg-transparent p-0 text-left text-[#20201E] cursor-pointer">
+        /*<button type="button" className="grow flex flex-col items-start gap-0.5 border-none bg-transparent p-0 text-left text-[#20201E] cursor-pointer">
           <small className="text-[12px] font-medium text-[#6B6B66]">Livrer à</small>
           <strong className="flex items-center gap-1 text-[15px] font-bold text-[#20201E]">
             {userAddress || '12 rue Oberkampf'}
             <ChevronDown size={15} strokeWidth={2.2} />
           </strong>
-        </button>
+        </button>*/
 
         <button 
           type="button" 
