@@ -375,7 +375,7 @@ export const ClientHome: React.FC<Props> = ({
                       </span>
                     </div>
                     <span className="text-[13px] text-[#6B6B66] font-medium whitespace-nowrap shrink-0 pt-0.5">
-                      Livraison {r.frais_livraison.toFixed(2).replace('.', ',')} €
+                      Livraison dès {r.frais_livraison.toFixed(2).replace('.', ',')} €
                     </span>
                   </div>
                 </div>
