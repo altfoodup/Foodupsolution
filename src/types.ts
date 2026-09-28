@@ -47,6 +47,7 @@ export interface Utilisateur {
   motif_decision?: string; // Motif décision admin
   valide_par?: string; // ID admin
   date_decision?: string;
+  photo_url?: string; // Photo (lien) – livreurs
 }
 
 export interface Restaurant {
@@ -79,6 +80,7 @@ export interface Plat {
   image_url: string;
   categorie: string; // 'Plats' | 'Entrées' | 'Desserts' | 'Boissons'
   disponible: boolean;
+  plat_du_jour?: boolean;
 }
 
 export interface LigneCommande {
