@@ -336,7 +336,7 @@ export const OrderDetailView: React.FC<Props> = ({ orderId, onBack }) => {
 
       {/* Snapshot Items and quantities */}
       <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 flex flex-col gap-3 shadow-2xs">
-        <h3 className="text-xs font-bold text-[#20201E]">Détail des plats (enregistré)</h3>
+        <h3 className="text-xs font-bold text-[#20201E]">Détail des plats</h3>
         <div className="flex flex-col gap-2 divide-y divide-[#E8E5DF]">
           {order.lignes && order.lignes.length > 0 ? (
             order.lignes.map(l => (
@@ -370,7 +370,7 @@ export const OrderDetailView: React.FC<Props> = ({ orderId, onBack }) => {
             <span>{order.frais_service.toFixed(2).replace('.', ',')} €</span>
           </div>
           <div className="pt-2 border-t border-[#E8E5DF] flex justify-between text-sm font-extrabold text-[#20201E]">
-            <span>Total payé (simulé)</span>
+            <span>Total payé</span>
             <span className="text-[#C94F00]">{order.total.toFixed(2).replace('.', ',')} €</span>
           </div>
         </div>
