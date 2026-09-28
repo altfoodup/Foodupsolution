@@ -32,6 +32,8 @@ export const LivreurApp: React.FC = () => {
     coursesJour: 0,
     coursesSemaine: 0,
     coursesMois: 0,
+    gainsAnnee: 0,
+    coursesAnnee: 0,
     nombreMissionsTerminees: 0
   });
 
@@ -526,6 +528,19 @@ export const LivreurApp: React.FC = () => {
                 <p className="text-2xl font-extrabold text-[#20201E]">{earnings.coursesMois || 0}</p>
                 <span className="text-xs text-[#6B6B66]">{(earnings.coursesMois || 0) > 1 ? 'courses' : 'course'}</span>
               </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-[#E8E5DF] flex items-center justify-between">
+              <div>
+                <span className="text-xs text-[#6B6B66]">Cumul de l'année {new Date().getFullYear()}</span>
+                <p className="text-2xl font-extrabold text-[#20201E]">
+                  {(earnings.gainsAnnee || 0).toFixed(2).replace('.', ',')} €
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-extrabold text-[#20201E]">{earnings.coursesAnnee || 0}</p>
+                <span className="text-xs text-[#6B6B66]">{(earnings.coursesAnnee || 0) > 1 ? 'courses' : 'course'}</span>
+              </div>
+            </div>
             </div>
           </div>
         </div>
