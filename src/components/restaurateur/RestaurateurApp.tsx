@@ -44,6 +44,8 @@ export const RestaurateurApp: React.FC = () => {
   const [dishDesc, setDishDesc] = useState('');
   const [dishPrix, setDishPrix] = useState('');
   const [dishCat, setDishCat] = useState('Plats');
+  const [dishImage, setDishImage] = useState('');
+  const [dishPlatDuJour, setDishPlatDuJour] = useState(false);
 
   // Activity filter
   const [activityPeriod, setActivityPeriod] = useState<'jour' | 'semaine' | 'mois'>('jour');
@@ -223,7 +225,9 @@ export const RestaurateurApp: React.FC = () => {
             nom: dishNom,
             description: dishDesc,
             prix: Number(dishPrix),
-            categorie: dishCat
+            categorie: dishCat,
+            image_url: dishImage.trim() || undefined,
+            plat_du_jour: dishPlatDuJour
           })
         });
         if (res.ok) {
@@ -242,7 +246,9 @@ export const RestaurateurApp: React.FC = () => {
             nom: dishNom,
             description: dishDesc,
             prix: Number(dishPrix),
-            categorie: dishCat
+            categorie: dishCat,
+            image_url: dishImage.trim() || undefined,
+            plat_du_jour: dishPlatDuJour
           })
         });
         if (res.ok) {
@@ -261,6 +267,8 @@ export const RestaurateurApp: React.FC = () => {
     setDishDesc('');
     setDishPrix('12.50');
     setDishCat('Plats');
+    setDishImage('');
+    setDishPlatDuJour(false);
     setIsDishModalOpen(true);
   };
 
@@ -270,6 +278,8 @@ export const RestaurateurApp: React.FC = () => {
     setDishDesc(plat.description);
     setDishPrix(plat.prix.toString());
     setDishCat(plat.categorie);
+    setDishImage(plat.image_url && plat.image_url.startsWith('http') ? plat.image_url : '');
+    setDishPlatDuJour(!!plat.plat_du_jour);
     setIsDishModalOpen(true);
   };
 
@@ -282,7 +292,8 @@ export const RestaurateurApp: React.FC = () => {
 
   // KPI calculations
   const deliveredOrders = orders.filter(o => o.statut === 'Livrée');
-  const totalCA = deliveredOrders.reduce((sum, o) => sum + o.total, 0);
+  // Revenu du restaurant = montant des plats (les frais reviennent au livreur et à FoodUp)
+  const totalCA = deliveredOrders.reduce((sum, o) => sum + (o.sous_total ?? o.total), 0);
   const avgBasket = deliveredOrders.length > 0 ? totalCA / deliveredOrders.length : 0;
   const refusalCount = orders.filter(o => o.statut === 'Refusée').length;
 
@@ -379,8 +390,13 @@ export const RestaurateurApp: React.FC = () => {
                         </p>
                       )}
 
+                      <div className="text-[11px] text-[#6B6B66] flex flex-col gap-0.5 mb-1.5">
+                        <div className="flex justify-between"><span>Sous-total plats (votre revenu)</span><span>{(order.sous_total ?? 0).toFixed(2)} €</span></div>
+                        <div className="flex justify-between"><span>Frais de livraison</span><span>{(order.frais_livraison ?? 0).toFixed(2)} €</span></div>
+                        <div className="flex justify-between"><span>Frais de service (FoodUp)</span><span>{(order.frais_service ?? 0).toFixed(2)} €</span></div>
+                      </div>
                       <div className="text-xs font-extrabold text-[#20201E] flex justify-between">
-                        <span>Total commande :</span>
+                        <span>Total payé par le client :</span>
                         <span className="text-[#C94F00]">{order.total.toFixed(2)} €</span>
                       </div>
                     </div>
@@ -451,6 +467,12 @@ export const RestaurateurApp: React.FC = () => {
                             <span className="font-semibold">{l.total_ligne.toFixed(2)} €</span>
                           </div>
                         ))}
+                        <div className="mt-1 pt-1 border-t border-[#E8E5DF] text-[11px] text-[#6B6B66] flex flex-col gap-0.5">
+                          <div className="flex justify-between"><span>Sous-total plats (votre revenu)</span><span>{(order.sous_total ?? 0).toFixed(2)} €</span></div>
+                          <div className="flex justify-between"><span>Frais de livraison</span><span>{(order.frais_livraison ?? 0).toFixed(2)} €</span></div>
+                          <div className="flex justify-between"><span>Frais de service (FoodUp)</span><span>{(order.frais_service ?? 0).toFixed(2)} €</span></div>
+                          <div className="flex justify-between font-bold text-[#20201E]"><span>Total client</span><span>{order.total.toFixed(2)} €</span></div>
+                        </div>
                       </div>
 
                       {/* Courier info if assigned */}
@@ -601,6 +623,11 @@ export const RestaurateurApp: React.FC = () => {
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#FFF1E5] text-[#9E3E00] font-semibold">
                       {plat.categorie}
                     </span>
+                    {plat.plat_du_jour && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F26A00] text-white font-bold">
+                        Plat du jour
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-[#6B6B66] line-clamp-1 mt-0.5">{plat.description}</p>
                   <span className="text-xs font-extrabold text-[#C94F00] mt-1 block">
@@ -889,6 +916,27 @@ export const RestaurateurApp: React.FC = () => {
                   className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-xs bg-white text-[#20201E] focus:outline-none focus:border-[#F26A00]"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#20201E] mb-1">Photo du plat (lien)</label>
+                <input
+                  type="url"
+                  value={dishImage}
+                  onChange={(e) => setDishImage(e.target.value)}
+                  placeholder="https://images.unsplash.com/photo-..."
+                  className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-xs bg-white text-[#20201E] focus:outline-none focus:border-[#F26A00]"
+                />
+                <p className="text-[10px] text-[#6B6B66] mt-1">Collez le lien <b>de l’image</b> (clic droit → « Copier l’adresse de l’image »).</p>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-[#20201E]">
+                <input
+                  type="checkbox"
+                  checked={dishPlatDuJour}
+                  onChange={(e) => setDishPlatDuJour(e.target.checked)}
+                />
+                C’est mon <b>plat du jour</b> (remplace le plat du jour actuel)
+              </label>
 
               <div className="pt-2 flex gap-2">
                 <button
