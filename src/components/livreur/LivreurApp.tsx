@@ -528,6 +528,7 @@ export const LivreurApp: React.FC = () => {
                 <p className="text-2xl font-extrabold text-[#20201E]">{earnings.coursesMois || 0}</p>
                 <span className="text-xs text-[#6B6B66]">{(earnings.coursesMois || 0) > 1 ? 'courses' : 'course'}</span>
               </div>
+            </div>
 
             <div className="p-4 bg-white rounded-2xl border border-[#E8E5DF] flex items-center justify-between">
               <div>
@@ -540,7 +541,6 @@ export const LivreurApp: React.FC = () => {
                 <p className="text-2xl font-extrabold text-[#20201E]">{earnings.coursesAnnee || 0}</p>
                 <span className="text-xs text-[#6B6B66]">{(earnings.coursesAnnee || 0) > 1 ? 'courses' : 'course'}</span>
               </div>
-            </div>
             </div>
           </div>
         </div>
