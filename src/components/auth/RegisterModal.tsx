@@ -27,7 +27,20 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
   // Restaurant
   const [nomRestaurant, setNomRestaurant] = useState('');
   const [cuisine, setCuisine] = useState('Cuisine française');
-  const [fraisLivraison, setFraisLivraison] = useState('2.90');
+  const [photoRestaurant, setPhotoRestaurant] = useState('');
+  // Plats saisis à l'inscription
+  type PlatSaisi = { nom: string; prix: string; categorie: string; description: string; image_url: string; plat_du_jour: boolean };
+  const nouveauPlat = (): PlatSaisi => ({ nom: '', prix: '', categorie: 'Plats', description: '', image_url: '', plat_du_jour: false });
+  const [platsSaisis, setPlatsSaisis] = useState<PlatSaisi[]>([nouveauPlat()]);
+  const majPlat = (i: number, champ: keyof PlatSaisi, valeur: any) => {
+    setPlatsSaisis(prev => prev.map((p, idx) => {
+      if (champ === 'plat_du_jour') return { ...p, plat_du_jour: idx === i ? valeur : false };
+      return idx === i ? { ...p, [champ]: valeur } : p;
+    }));
+  };
+
+  // Photo du livreur
+  const [photoLivreur, setPhotoLivreur] = useState('');
   const [descriptionResto, setDescriptionResto] = useState('');
   const [quartier, setQuartier] = useState('Plaisance');
 
@@ -62,7 +75,9 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
           description_restaurant: descriptionResto,
           quartier,
           delai: '20–30 min',
-          frais_livraison: Number(String(fraisLivraison).replace(',', '.')) || 2.90
+          photo_restaurant: photoRestaurant,
+          photo_url: photoLivreur,
+          plats: platsSaisis.filter(p => p.nom.trim() && p.prix !== '')
         })
       });
 
@@ -298,23 +313,100 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-[#20201E] mb-1">Frais de livraison (€)</label>
+              <div>
+                <label className="block text-xs font-semibold text-[#20201E] mb-1">Photo du restaurant (lien)</label>
+                <input
+                  type="url"
+                  value={photoRestaurant}
+                  onChange={(e) => setPhotoRestaurant(e.target.value)}
+                  placeholder="https://images.unsplash.com/photo-..."
+                  className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                />
+                <p className="text-[10px] text-[#6B6B66] mt-1">Collez le lien <b>de l’image</b> (clic droit sur l’image → « Copier l’adresse de l’image »), pas celui de la page.</p>
+              </div>
+
+              <div className="p-2.5 bg-white border border-[#F8D9BF] rounded-xl text-[11px] text-[#6B6B66]">
+                Frais fixés par FoodUp : <b>livraison 5,00 €</b> · <b>service 1,00 €</b>. Votre revenu correspond au montant des plats.
+              </div>
+
+              <h4 className="text-xs font-bold text-[#9E3E00] pt-2">Vos premiers plats</h4>
+              {platsSaisis.map((p, i) => (
+                <div key={i} className="p-2.5 bg-white border border-[#E8E5DF] rounded-xl space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={p.nom}
+                      onChange={(e) => majPlat(i, 'nom', e.target.value)}
+                      placeholder="Nom du plat"
+                      className="col-span-2 w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                    />
+                    <input
+                      type="number"
+                      step="0.10"
+                      min="0"
+                      value={p.prix}
+                      onChange={(e) => majPlat(i, 'prix', e.target.value)}
+                      placeholder="Prix €"
+                      className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={p.categorie}
+                      onChange={(e) => majPlat(i, 'categorie', e.target.value)}
+                      className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                    >
+                      <option value="Entrées">Entrées</option>
+                      <option value="Plats">Plats</option>
+                      <option value="Desserts">Desserts</option>
+                      <option value="Boissons">Boissons</option>
+                    </select>
+                    <input
+                      type="url"
+                      value={p.image_url}
+                      onChange={(e) => majPlat(i, 'image_url', e.target.value)}
+                      placeholder="Lien photo du plat"
+                      className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                    />
+                  </div>
                   <input
-                    type="number"
-                    step="0.10"
-                    min="0"
-                    value={fraisLivraison}
-                    onChange={(e) => setFraisLivraison(e.target.value)}
+                    type="text"
+                    value={p.description}
+                    onChange={(e) => majPlat(i, 'description', e.target.value)}
+                    placeholder="Description (facultatif)"
                     className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
                   />
+                  <div className="flex justify-between items-center">
+                    <label className="flex items-center gap-1.5 text-xs text-[#20201E]">
+                      <input
+                        type="radio"
+                        name="plat_du_jour"
+                        checked={p.plat_du_jour}
+                        onChange={() => majPlat(i, 'plat_du_jour', true)}
+                      />
+                      Plat du jour
+                    </label>
+                    {platsSaisis.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setPlatsSaisis(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-[11px] text-[#D64545] hover:underline"
+                      >
+                        Retirer
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#20201E] mb-1">Frais de service</label>
-                  <div className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm bg-[#FFF8EE] text-[#6B6B66]">1,00 € (fixé par FoodUp)</div>
-                </div>
-              </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPlatsSaisis(prev => [...prev, nouveauPlat()])}
+                className="text-xs font-semibold text-[#C94F00] hover:underline"
+              >
+                + Ajouter un plat
+              </button>
+              <p className="text-[10px] text-[#6B6B66]">Vous pourrez compléter votre carte ensuite depuis votre espace restaurateur.</p>
+
               <p className="text-[11px] text-[#6B6B66]">
                 ℹ️ Votre établissement sera soumis à validation par l’administrateur FoodUp avant ouverture aux commandes.
               </p>
@@ -350,6 +442,17 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     <option value="Paris Centre">Paris Centre</option>
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#20201E] mb-1">Votre photo (lien)</label>
+                <input
+                  type="url"
+                  value={photoLivreur}
+                  onChange={(e) => setPhotoLivreur(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                />
+                <p className="text-[10px] text-[#6B6B66] mt-1">Collez le lien <b>de l’image</b> (clic droit sur l’image → « Copier l’adresse de l’image »). Elle sera visible par les clients.</p>
               </div>
               <p className="text-[11px] text-[#6B6B66]">
                 ℹ️ Votre candidature sera examinée par l’équipe FoodUp avant l’accès aux missions.
