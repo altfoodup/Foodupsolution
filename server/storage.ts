@@ -418,7 +418,7 @@ export class DataStore {
           livreur_id: r.fields.livreur_id || undefined,
           statut: r.fields.statut || 'Disponible',
           // Rémunération du livreur = frais de livraison de la commande
-          remuneration_annoncee: linkedOrder ? calculerRemunerationLivreur(linkedOrder.frais_livraison) : (Number(r.fields.remuneration_annoncee) || 0),
+          remuneration_annoncee: (Number(r.fields.remuneration_annoncee) > 0 ? Number(r.fields.remuneration_annoncee) : (linkedOrder ? calculerRemunerationLivreur(linkedOrder.frais_livraison) : 0)),
           date_attribution: r.fields.date_attribution,
           date_retrait: r.fields.date_retrait,
           date_livraison: r.fields.date_livraison
@@ -1298,7 +1298,7 @@ export class DataStore {
               restaurant_id: linkedOrder?.restaurant_id || 'RST-003',
               livreur_id: undefined,
               statut: 'Disponible',
-              remuneration_annoncee: linkedOrder ? calculerRemunerationLivreur(linkedOrder.frais_livraison) : (Number(r.fields.remuneration_annoncee) || 0),
+              remuneration_annoncee: (Number(r.fields.remuneration_annoncee) > 0 ? Number(r.fields.remuneration_annoncee) : (linkedOrder ? calculerRemunerationLivreur(linkedOrder.frais_livraison) : 0)),
               date_attribution: undefined,
               date_retrait: undefined,
               date_livraison: undefined
