@@ -30,11 +30,9 @@ export const FRAIS_LIVRAISON_POURCENTAGE = 0.10;
 export const calculerFraisLivraison = (base: number, sousTotalPlats: number): number =>
   Number(((Number(base) || FRAIS_LIVRAISON) + FRAIS_LIVRAISON_POURCENTAGE * (Number(sousTotalPlats) || 0)).toFixed(2));
 
-// Rémunération du livreur : 3 € fixe + 10 % du montant total de la commande
-export const REMUNERATION_FIXE = 3;
-export const REMUNERATION_POURCENTAGE = 0.10;
-export const calculerRemunerationLivreur = (totalCommande: number): number =>
-  Number((REMUNERATION_FIXE + REMUNERATION_POURCENTAGE * (Number(totalCommande) || 0)).toFixed(2));
+// Rémunération du livreur : les frais de livraison payés par le client pour cette commande
+export const calculerRemunerationLivreur = (fraisLivraisonCommande: number): number =>
+  Number((Number(fraisLivraisonCommande) || 0).toFixed(2));
 
 // Un lien de photo n'est gardé que s'il commence par http
 const isUrl = (v: any) => typeof v === 'string' && /^https?:\/\//.test(v.trim());
@@ -50,6 +48,35 @@ export class DataStore {
     signalements: [],
     historique_actions: []
   };
+
+  // Derniers numéros attribués (CMD, MIS, USR…) : ils ne reculent jamais,
+  // même si un rechargement Airtable arrive au mauvais moment.
+  private idCounters: Record<string, number> = {};
+
+  private nextNumber(prefix: string, ids: string[], floor = 0): number {
+    let max = Math.max(floor, this.idCounters[prefix] || 0);
+    for (const id of ids) {
+      if (!String(id).startsWith(prefix)) continue;
+      const num = parseInt(String(id).replace(/\D/g, ''), 10);
+      if (!isNaN(num) && num > max) max = num;
+    }
+    this.idCounters[prefix] = max + 1;
+    return max + 1;
+  }
+
+  // Éléments créés sur le site il y a peu : on les garde lors d'un rechargement
+  // tant qu'Airtable ne les renvoie pas encore (évite qu'ils disparaissent ou soient dupliqués).
+  private recentLocal = new Map<object, number>();
+  private markLocal(item: object) { this.recentLocal.set(item, Date.now()); }
+  private keepRecent<T extends { id: string; airtableRecordId?: string }>(oldList: T[], newList: T[]): T[] {
+    const limit = Date.now() - 3 * 60 * 1000;
+    const extra = oldList.filter(item => {
+      const t = this.recentLocal.get(item);
+      if (!t || t < limit) return false;
+      return !newList.some(n => n.id === item.id || (!!item.airtableRecordId && n.airtableRecordId === item.airtableRecordId));
+    });
+    return extra.length ? [...extra, ...newList] : newList;
+  }
 
   private airtablePat: string;
   private airtableBaseId: string;
@@ -390,8 +417,8 @@ export class DataStore {
           restaurant_id: linkedOrder?.restaurant_id || 'RST-005',
           livreur_id: r.fields.livreur_id || undefined,
           statut: r.fields.statut || 'Disponible',
-          // Rémunération du livreur : 3 € + 10 % du total de la commande
-          remuneration_annoncee: linkedOrder ? calculerRemunerationLivreur(linkedOrder.total) : (Number(r.fields.remuneration_annoncee) || REMUNERATION_FIXE),
+          // Rémunération du livreur = frais de livraison de la commande
+          remuneration_annoncee: linkedOrder ? calculerRemunerationLivreur(linkedOrder.frais_livraison) : (Number(r.fields.remuneration_annoncee) || 0),
           date_attribution: r.fields.date_attribution,
           date_retrait: r.fields.date_retrait,
           date_livraison: r.fields.date_livraison
@@ -440,15 +467,16 @@ export class DataStore {
         };
       });
 
+      const old = this.data;
       this.data = {
-        utilisateurs: users,
-        restaurants,
-        plats,
-        commandes,
-        lignes_commande,
-        missions_livraison,
-        signalements,
-        historique_actions
+        utilisateurs: this.keepRecent(old.utilisateurs, users),
+        restaurants: this.keepRecent(old.restaurants, restaurants),
+        plats: this.keepRecent(old.plats, plats),
+        commandes: this.keepRecent(old.commandes, commandes),
+        lignes_commande: this.keepRecent(old.lignes_commande, lignes_commande),
+        missions_livraison: this.keepRecent(old.missions_livraison, missions_livraison),
+        signalements: this.keepRecent(old.signalements, signalements),
+        historique_actions: this.keepRecent(old.historique_actions, historique_actions)
       };
 
       this.isInitialized = true;
@@ -559,7 +587,7 @@ export class DataStore {
       id,
       ...userData
     };
-    this.data.utilisateurs.push(user);
+    this.data.utilisateurs.push(user); this.markLocal(user);
 
     // Sync to Airtable in background
     this.airtablePost('Utilisateurs', {
@@ -585,12 +613,7 @@ export class DataStore {
   // CORRECTION : création d'utilisateur qui ATTEND la réponse d'Airtable,
   // envoie l'adresse complète, et évite les numéros USR en double.
   async createUserAsync(userData: Omit<Utilisateur, 'id'>): Promise<Utilisateur> {
-    let maxNum = 0;
-    for (const u of this.data.utilisateurs) {
-      const num = parseInt(String(u.id).replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num > maxNum) maxNum = num;
-    }
-    const id = `USR-${String(maxNum + 1).padStart(3, '0')}`;
+    const id = `USR-${String(this.nextNumber('USR', this.data.utilisateurs.map(u => u.id))).padStart(3, '0')}`;
     const adresseComplete = [userData.adresse, [userData.code_postal, userData.ville].filter(Boolean).join(' ')]
       .filter(Boolean).join(', ');
     const user: Utilisateur & { airtableRecordId?: string } = {
@@ -600,7 +623,7 @@ export class DataStore {
       code_postal: '',
       ville: ''
     };
-    this.data.utilisateurs.push(user);
+    this.data.utilisateurs.push(user); this.markLocal(user);
 
     const res = await this.airtablePost('Utilisateurs', {
       utilisateur_id: id,
@@ -667,7 +690,7 @@ export class DataStore {
       id,
       ...restData
     };
-    this.data.restaurants.push(rest);
+    this.data.restaurants.push(rest); this.markLocal(rest);
 
     // Find owner Airtable record ID
     const owner = this.data.utilisateurs.find(u => u.id === restData.proprietaire_id);
@@ -697,14 +720,9 @@ export class DataStore {
 
   // CORRECTION : création de restaurant qui ATTEND Airtable, avec le lien vers le restaurateur
   async createRestaurantAsync(restData: Omit<Restaurant, 'id'>): Promise<Restaurant> {
-    let maxNum = 0;
-    for (const r of this.data.restaurants) {
-      const num = parseInt(String(r.id).replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num > maxNum) maxNum = num;
-    }
-    const id = `RST-${String(maxNum + 1).padStart(3, '0')}`;
+    const id = `RST-${String(this.nextNumber('RST', this.data.restaurants.map(r => r.id))).padStart(3, '0')}`;
     const rest: Restaurant & { airtableRecordId?: string } = { id, ...restData };
-    this.data.restaurants.push(rest);
+    this.data.restaurants.push(rest); this.markLocal(rest);
 
     const owner = this.data.utilisateurs.find(u => u.id === restData.proprietaire_id);
     const adresseComplete = [rest.adresse, [rest.code_postal, rest.ville].filter(Boolean).join(' ')]
@@ -762,13 +780,12 @@ export class DataStore {
   }
 
   createDish(dishData: Omit<Plat, 'id'>): Plat {
-    const nextNum = this.data.plats.length + 1;
-    const id = `PLT-${String(nextNum).padStart(3, '0')}`;
+    const id = `PLT-${String(this.nextNumber('PLT', this.data.plats.map(p => p.id))).padStart(3, '0')}`;
     const dish: Plat & { airtableRecordId?: string } = {
       id,
       ...dishData
     };
-    this.data.plats.push(dish);
+    this.data.plats.push(dish); this.markLocal(dish);
 
     this.airtablePost('Plats', {
       plat_id: id,
@@ -915,12 +932,7 @@ export class DataStore {
     const totalOrder = Number((calculatedSubTotal + fraisLivraison + fraisService).toFixed(2));
 
     // Generate unique incremental CMD ID avoiding any collision
-    let maxCmdNum = 700;
-    for (const c of this.data.commandes) {
-      const num = parseInt(c.id.replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num > maxCmdNum) maxCmdNum = num;
-    }
-    const orderId = `CMD-${maxCmdNum + 1}`;
+    let orderId = `CMD-${this.nextNumber('CMD', this.data.commandes.map(c => c.id), 700)}`;
     const now = new Date().toISOString();
 
     const newOrder: Commande & { airtableRecordId?: string } = {
@@ -939,7 +951,7 @@ export class DataStore {
       mise_a_jour_a: now,
     };
 
-    this.data.commandes.unshift(newOrder);
+    this.data.commandes.unshift(newOrder); this.markLocal(newOrder);
 
     // Create lines in memory
     const createdLignes: (LigneCommande & { airtableRecordId?: string })[] = [];
@@ -954,7 +966,7 @@ export class DataStore {
         quantite: line.quantite,
         total_ligne: line.total,
       };
-      this.data.lignes_commande.push(newLigne);
+      this.data.lignes_commande.push(newLigne); this.markLocal(newLigne);
       createdLignes.push(newLigne);
     });
 
@@ -1068,12 +1080,7 @@ export class DataStore {
     const totalOrder = Number((calculatedSubTotal + fraisLivraison + fraisService).toFixed(2));
 
     // Generate unique incremental CMD ID avoiding any collision
-    let maxCmdNum = 700;
-    for (const c of this.data.commandes) {
-      const num = parseInt(c.id.replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num > maxCmdNum) maxCmdNum = num;
-    }
-    const orderId = `CMD-${maxCmdNum + 1}`;
+    let orderId = `CMD-${this.nextNumber('CMD', this.data.commandes.map(c => c.id), 700)}`;
     const now = new Date().toISOString();
 
     const newOrder: Commande & { airtableRecordId?: string } = {
@@ -1092,7 +1099,7 @@ export class DataStore {
       mise_a_jour_a: now,
     };
 
-    this.data.commandes.unshift(newOrder);
+    this.data.commandes.unshift(newOrder); this.markLocal(newOrder);
 
     // Create lines in memory
     const createdLignes: (LigneCommande & { airtableRecordId?: string })[] = [];
@@ -1107,7 +1114,7 @@ export class DataStore {
         quantite: line.quantite,
         total_ligne: line.total,
       };
-      this.data.lignes_commande.push(newLigne);
+      this.data.lignes_commande.push(newLigne); this.markLocal(newLigne);
       createdLignes.push(newLigne);
     });
 
@@ -1144,6 +1151,16 @@ export class DataStore {
 
       if (createdCmd?.id) {
         newOrder.airtableRecordId = createdCmd.id;
+
+        // Si Airtable attribue lui-même le numéro de commande (formule…), on reprend le sien
+        const airtableCmdId = createdCmd.fields?.commande_id;
+        if (typeof airtableCmdId === 'string' && airtableCmdId && airtableCmdId !== orderId) {
+          console.warn(`ℹ️ Airtable a numéroté la commande ${airtableCmdId} (au lieu de ${orderId}) : on reprend son numéro.`);
+          for (const l of createdLignes) l.commande_id = airtableCmdId;
+          for (const h of this.data.historique_actions) if (h.commande_id === orderId) h.commande_id = airtableCmdId;
+          newOrder.id = airtableCmdId;
+          orderId = airtableCmdId;
+        }
 
         // Write each line to Airtable Lignes_commande linked to the created Commande
         for (const line of createdLignes) {
@@ -1281,7 +1298,7 @@ export class DataStore {
               restaurant_id: linkedOrder?.restaurant_id || 'RST-003',
               livreur_id: undefined,
               statut: 'Disponible',
-              remuneration_annoncee: linkedOrder ? calculerRemunerationLivreur(linkedOrder.total) : (Number(r.fields.remuneration_annoncee) || REMUNERATION_FIXE),
+              remuneration_annoncee: linkedOrder ? calculerRemunerationLivreur(linkedOrder.frais_livraison) : (Number(r.fields.remuneration_annoncee) || 0),
               date_attribution: undefined,
               date_retrait: undefined,
               date_livraison: undefined
@@ -1326,19 +1343,14 @@ export class DataStore {
       return this.enrichMission(existing);
     }
 
-    let maxMisNum = 700;
-    for (const m of this.data.missions_livraison) {
-      const num = parseInt(m.id.replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num > maxMisNum) maxMisNum = num;
-    }
-    const id = `MIS-${maxMisNum + 1}`;
+    const id = `MIS-${this.nextNumber('MIS', this.data.missions_livraison.map(m => m.id), 700)}`;
     const mission: MissionLivraison & { airtableRecordId?: string } = {
       id,
       ...missionData,
       livreur_id: undefined,
       statut: 'Disponible'
     };
-    this.data.missions_livraison.unshift(mission);
+    this.data.missions_livraison.unshift(mission); this.markLocal(mission);
 
     // Find linked order
     const order = this.data.commandes.find(c => c.id === missionData.commande_id);
@@ -1382,19 +1394,14 @@ export class DataStore {
     const baseId = process.env.AIRTABLE_BASE_ID || this.airtableBaseId;
 
     // 2. Generate unique incremental MIS ID avoiding collision
-    let maxMisNum = 700;
-    for (const m of this.data.missions_livraison) {
-      const num = parseInt(m.id.replace(/\D/g, ''), 10);
-      if (!isNaN(num) && num > maxMisNum) maxMisNum = num;
-    }
-    const id = `MIS-${maxMisNum + 1}`;
+    const id = `MIS-${this.nextNumber('MIS', this.data.missions_livraison.map(m => m.id), 700)}`;
     const mission: MissionLivraison & { airtableRecordId?: string } = {
       id,
       ...missionData,
       livreur_id: undefined, // strictly unassigned upon creation
       statut: 'Disponible'
     };
-    this.data.missions_livraison.unshift(mission);
+    this.data.missions_livraison.unshift(mission); this.markLocal(mission);
 
     const order = this.data.commandes.find(c => c.id === missionData.commande_id);
     if (order) {
@@ -1416,6 +1423,11 @@ export class DataStore {
 
         if (res?.id) {
           mission.airtableRecordId = res.id;
+          const airtableMisId = res.fields?.mission_id;
+          if (typeof airtableMisId === 'string' && airtableMisId && airtableMisId !== mission.id) {
+            mission.id = airtableMisId;
+            if (order) order.mission_id = airtableMisId;
+          }
           if (order?.airtableRecordId) {
             await this.airtablePatch('Commandes', order.airtableRecordId, {
               mission_id: [res.id]
@@ -1524,8 +1536,7 @@ export class DataStore {
   }
 
   createReport(reportData: Omit<Signalement, 'id' | 'cree_a' | 'statut'>): Signalement {
-    const nextNum = this.data.signalements.length + 1;
-    const id = `SIG-${String(nextNum).padStart(3, '0')}`;
+    const id = `SIG-${String(this.nextNumber('SIG', this.data.signalements.map(x => x.id))).padStart(3, '0')}`;
     const now = new Date().toISOString();
     const report: Signalement & { airtableRecordId?: string } = {
       id,
@@ -1533,7 +1544,7 @@ export class DataStore {
       statut: 'Nouveau',
       cree_a: now
     };
-    this.data.signalements.unshift(report);
+    this.data.signalements.unshift(report); this.markLocal(report);
 
     const user = this.getUserById(reportData.auteur_id);
     this.createHistoryEvent({
@@ -1615,7 +1626,7 @@ export class DataStore {
       ...eventData,
       date: now
     };
-    this.data.historique_actions.unshift(event);
+    this.data.historique_actions.unshift(event); this.markLocal(event);
 
     // Write to Airtable
     this.airtablePost('Historique_actions', {
@@ -1640,7 +1651,7 @@ export class DataStore {
       ...eventData,
       date: now
     };
-    this.data.historique_actions.unshift(event);
+    this.data.historique_actions.unshift(event); this.markLocal(event);
 
     try {
       const res = await this.airtablePost('Historique_actions', {
