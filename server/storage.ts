@@ -21,8 +21,14 @@ interface DatabaseSchema {
 }
 
 // Règles de frais FoodUp (identiques partout)
-export const FRAIS_LIVRAISON = 5;   // payés par le client
+export const FRAIS_LIVRAISON = 5;   // base par défaut si la colonne frais_livraison du restaurant est vide
 export const FRAIS_SERVICE = 1;     // frais de service FoodUp
+
+// Frais de livraison payés par le client :
+// base du restaurant (colonne frais_livraison d'Airtable) + 10 % du sous-total des plats
+export const FRAIS_LIVRAISON_POURCENTAGE = 0.10;
+export const calculerFraisLivraison = (base: number, sousTotalPlats: number): number =>
+  Number(((Number(base) || FRAIS_LIVRAISON) + FRAIS_LIVRAISON_POURCENTAGE * (Number(sousTotalPlats) || 0)).toFixed(2));
 
 // Rémunération du livreur : 3 € fixe + 10 % du montant total de la commande
 export const REMUNERATION_FIXE = 3;
@@ -254,8 +260,8 @@ export class DataStore {
           quartier: r.fields.quartier || 'Plaisance',
           delai: `${delaiMin}–${delaiMax} min`,
           delai_min: delaiMin,
-          // Frais fixés par FoodUp
-          frais_livraison: FRAIS_LIVRAISON,
+          // Base des frais de livraison : colonne frais_livraison d'Airtable (5 € si vide)
+          frais_livraison: Number(r.fields.frais_livraison) || FRAIS_LIVRAISON,
           frais_service: FRAIS_SERVICE,
           couleur: '#FFF1E5',
           photo: r.fields.image_url || 'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1200&q=80',
@@ -903,7 +909,8 @@ export class DataStore {
     }
 
     calculatedSubTotal = Number(calculatedSubTotal.toFixed(2));
-    const fraisLivraison = restaurant.frais_livraison;
+    // Frais de livraison calculés à la commande : base du restaurant + 10 % des plats
+    const fraisLivraison = calculerFraisLivraison(restaurant.frais_livraison, calculatedSubTotal);
     const fraisService = restaurant.frais_service;
     const totalOrder = Number((calculatedSubTotal + fraisLivraison + fraisService).toFixed(2));
 
@@ -1055,7 +1062,8 @@ export class DataStore {
     }
 
     calculatedSubTotal = Number(calculatedSubTotal.toFixed(2));
-    const fraisLivraison = restaurant.frais_livraison;
+    // Frais de livraison calculés à la commande : base du restaurant + 10 % des plats
+    const fraisLivraison = calculerFraisLivraison(restaurant.frais_livraison, calculatedSubTotal);
     const fraisService = restaurant.frais_service;
     const totalOrder = Number((calculatedSubTotal + fraisLivraison + fraisService).toFixed(2));
 
