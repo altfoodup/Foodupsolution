@@ -159,3 +159,8 @@ export function construireEvenementWebhook(corpsBrut: Buffer, signature: string)
   if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET manquant');
   return getStripe().webhooks.constructEvent(corpsBrut, signature, secret);
 }
+// Statut réel du paiement chez Stripe (filet de sécurité si le webhook tarde)
+export async function statutPaiement(paymentIntentId: string) {
+  const pi = await getStripe().paymentIntents.retrieve(paymentIntentId);
+  return pi.status;
+}
