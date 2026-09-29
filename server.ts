@@ -12,6 +12,7 @@ import {
   creerCompteConnecte,
   creerSessionOnboarding,
   construireEvenementWebhook,
+  statutPaiement,
 } from './server/stripe.js';
 
 dotenv.config();
@@ -448,6 +449,40 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     res.status(201).json({ ...db.getOrderById(newOrder.id), client_secret: clientSecret });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Erreur lors de la création de la commande.' });
+  }
+});
+
+// Le client confirme son paiement : on vérifie auprès de Stripe (filet de sécurité si le webhook tarde)
+app.post('/api/orders/:id/confirm-payment', async (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser || authUser.role !== 'Client') {
+    return res.status(403).json({ error: 'Action réservée au client.' });
+  }
+
+  const order = db.getOrderById(req.params.id);
+  if (!order || order.client_id !== authUser.id) {
+    return res.status(404).json({ error: 'Commande introuvable.' });
+  }
+
+  try {
+    if (order.statut === 'En attente de paiement' && order.stripe_payment_intent_id) {
+      const statut = await statutPaiement(order.stripe_payment_intent_id);
+      if (statut === 'requires_capture') {
+        await db.updateOrderAsync(order.id, {
+          statut: 'En attente du restaurant',
+          paiement_statut: 'Autorisé',
+        });
+        await db.createHistoryEventAsync({
+          commande_id: order.id,
+          acteur_id: order.client_id,
+          action: 'PAIEMENT_AUTORISE',
+          description: `Le paiement de la commande ${order.id} a été autorisé par la banque du client.`,
+        });
+      }
+    }
+    res.json(db.getOrderById(order.id));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erreur Stripe.' });
   }
 });
 
