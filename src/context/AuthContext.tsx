@@ -32,7 +32,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Arrivée depuis un bouton d'inscription du site vitrine (?inscription=...) :
     // pas de connexion automatique, on affiche l'écran de connexion
     // (la fenêtre de création de compte s'ouvre par-dessus).
-    if (new URLSearchParams(window.location.search).has('inscription')) {
+    // Arrivée depuis le site vitrine :
+    //   ?connexion   -> bouton « Commander » : écran de connexion, aucun compte connecté
+    //   ?inscription -> boutons « Créer mon compte » : écran de connexion + fenêtre d'inscription
+    const parametres = new URLSearchParams(window.location.search);
+    if (parametres.has('connexion') || parametres.has('inscription')) {
+      localStorage.removeItem('foodup_active_email'); // oublie le dernier compte utilisé
+      window.history.replaceState(null, '', window.location.pathname); // nettoie l'adresse
       setIsLoginPage(true);
       setIsLoading(false);
       return;
