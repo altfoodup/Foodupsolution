@@ -898,43 +898,7 @@ app.get('/api/admin/dashboard', (req: Request, res: Response) => {
   // Active couriers
   const livreursActifs = users.filter(u => u.role === 'Livreur' && u.compte_actif && u.disponible_livraison).length;
 
-  // ---- Résultat financier FoodUp (commandes livrées), à l'heure de Paris ----
-  const jourParis = (d: Date) => d.toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
-  const aujourdhuiParis = jourParis(now);
-  const periodeVide = () => ({ commandes: 0, volume: 0, restaurants: 0, livreurs: 0, revenus: 0, resultat: 0 });
-  const finances: Record<'jour' | 'mois' | 'annee', ReturnType<typeof periodeVide>> = {
-    jour: periodeVide(), mois: periodeVide(), annee: periodeVide()
-  };
-  for (const o of deliveredOrders) {
-    const mission = missions.find(m => m.commande_id === o.id);
-    const dateRef = mission?.date_livraison || o.mise_a_jour_a || o.cree_a;
-    const d = new Date(dateRef);
-    if (isNaN(d.getTime())) continue;
-    const jour = jourParis(d);
-    const livreur = Number(mission?.remuneration_annoncee) || Number(o.frais_livraison) || 0;
-    const revenus = (Number(o.frais_livraison) || 0) + (Number(o.frais_service) || 0);
-    const periodes: Array<'jour' | 'mois' | 'annee'> = [];
-    if (jour === aujourdhuiParis) periodes.push('jour');
-    if (jour.slice(0, 7) === aujourdhuiParis.slice(0, 7)) periodes.push('mois');
-    if (jour.slice(0, 4) === aujourdhuiParis.slice(0, 4)) periodes.push('annee');
-    for (const p of periodes) {
-      const f = finances[p];
-      f.commandes += 1;
-      f.volume += Number(o.total) || 0;               // payé par les clients
-      f.restaurants += Number(o.sous_total) || 0;     // reversé aux restaurants (montant des plats)
-      f.livreurs += livreur;                          // reversé aux livreurs
-      f.revenus += revenus;                           // frais de livraison + frais de service
-      f.resultat += revenus - livreur;                // ce qui reste à FoodUp
-    }
-  }
-  for (const f of Object.values(finances)) {
-    for (const k of ['volume', 'restaurants', 'livreurs', 'revenus', 'resultat'] as const) {
-      f[k] = Number(f[k].toFixed(2));
-    }
-  }
-
   res.json({
-    finances,
     kpi: {
       commandesEnCours,
       incidentsATraiter,
