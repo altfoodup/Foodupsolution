@@ -1005,7 +1005,7 @@ export class DataStore {
       frais_livraison: fraisLivraison,
       frais_service: fraisService,
       total_client: totalOrder,
-      paiement_simule: 'Confirmé',
+      paiement_status: 'captured'
       date_creation: now,
       date_modification: now
     }).then(createdCmd => {
@@ -1154,7 +1154,7 @@ export class DataStore {
         frais_livraison: fraisLivraison,
         frais_service: fraisService,
         total_client: totalOrder,
-        paiement_simule: 'Confirmé',
+        paiement_status: 'captured,
         date_creation: now,
         date_modification: now
       });
