@@ -427,6 +427,11 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       items
     });
 
+    // Sans clé Stripe configurée (Render) : ancien fonctionnement, paiement simulé
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(201).json(newOrder);
+    }
+
     // Autorisation de carte (le débit réel a lieu quand le restaurateur accepte)
     const { paymentIntentId, clientSecret } = await creerAutorisationCommande({
       commandeId: newOrder.id,
