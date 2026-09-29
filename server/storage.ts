@@ -248,7 +248,9 @@ export class DataStore {
           motif_decision: r.fields.motif_decision,
           valide_par: r.fields.valide_par_id,
           date_decision: r.fields.date_decision,
-          photo_url: r.fields.photo_url || undefined
+          photo_url: r.fields.photo_url || undefined,
+          stripe_account_id: r.fields.stripe_account_id || undefined,
+          stripe_pret: r.fields.stripe_pret === true || r.fields.stripe_pret === 'Oui'
         };
       });
 
@@ -364,7 +366,14 @@ export class DataStore {
           motif_refus: r.fields.motif_refus_annulation,
           paiement_simule: 'Validé',
           cree_a: r.fields.date_creation || new Date().toISOString(),
-          mise_a_jour_a: r.fields.date_modification || r.fields.date_creation || new Date().toISOString()
+          mise_a_jour_a: r.fields.date_modification || r.fields.date_creation || new Date().toISOString(),
+          paiement_statut: r.fields.paiement_statut || undefined,
+          stripe_payment_intent_id: r.fields.stripe_payment_intent_id || undefined,
+          stripe_charge_id: r.fields.stripe_charge_id || undefined,
+          stripe_transfer_restaurateur_id: r.fields.stripe_transfer_restaurateur_id || undefined,
+          stripe_transfer_livreur_id: r.fields.stripe_transfer_livreur_id || undefined,
+          montant_restaurateur: r.fields.montant_restaurateur !== undefined ? Number(r.fields.montant_restaurateur) : undefined,
+          commission_plateforme: r.fields.commission_plateforme !== undefined ? Number(r.fields.commission_plateforme) : undefined
         };
       });
 
@@ -659,7 +668,8 @@ export class DataStore {
       if (updates.motif_decision) airtableFields.motif_decision = updates.motif_decision;
       if (updates.valide_par) airtableFields.valide_par_id = updates.valide_par;
       if (updates.date_decision) airtableFields.date_decision = updates.date_decision;
-      if (updates.disponible_livraison !== undefined) airtableFields.disponible_livraison = updates.disponible_livraison ? 'Oui' : 'Non';
+      if (updates.stripe_account_id) airtableFields.stripe_account_id = updates.stripe_account_id;
+      if (updates.stripe_pret !== undefined) airtableFields.stripe_pret = updates.stripe_pret;
 
       if (Object.keys(airtableFields).length > 0) {
         this.airtablePatch('Utilisateurs', user.airtableRecordId, airtableFields)
@@ -1185,7 +1195,18 @@ export class DataStore {
 
     return this.enrichOrder(newOrder);
   }
-
+    // Champs Stripe d'une commande -> colonnes Airtable
+  private champsStripeCommande(updates: Partial<Commande>): Record<string, any> {
+    const f: Record<string, any> = {};
+    if (updates.paiement_statut !== undefined) f.paiement_statut = updates.paiement_statut;
+    if (updates.stripe_payment_intent_id !== undefined) f.stripe_payment_intent_id = updates.stripe_payment_intent_id;
+    if (updates.stripe_charge_id !== undefined) f.stripe_charge_id = updates.stripe_charge_id;
+    if (updates.stripe_transfer_restaurateur_id !== undefined) f.stripe_transfer_restaurateur_id = updates.stripe_transfer_restaurateur_id;
+    if (updates.stripe_transfer_livreur_id !== undefined) f.stripe_transfer_livreur_id = updates.stripe_transfer_livreur_id;
+    if (updates.montant_restaurateur !== undefined) f.montant_restaurateur = updates.montant_restaurateur;
+    if (updates.commission_plateforme !== undefined) f.commission_plateforme = updates.commission_plateforme;
+    return f;
+  }
   updateOrder(id: string, updates: Partial<Commande>): Commande | undefined {
     const order = this.data.commandes.find(c => c.id === id);
     if (!order) return undefined;
