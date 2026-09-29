@@ -470,7 +470,11 @@ app.post('/api/orders/:id/confirm-payment', async (req: Request, res: Response) 
   }
 
   try {
-    if (order.statut === 'En attente de paiement' && order.stripe_payment_intent_id) {
+        if (
+      order.stripe_payment_intent_id &&
+      (order.statut === 'En attente de paiement' ||
+        (order.statut === 'En attente du restaurant' && order.paiement_statut !== 'Autorisé'))
+    ) {
       const statut = await statutPaiement(order.stripe_payment_intent_id);
       if (statut === 'requires_capture') {
         await db.updateOrderAsync(order.id, {
