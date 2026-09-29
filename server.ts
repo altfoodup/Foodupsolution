@@ -34,7 +34,12 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     if (event.type === 'payment_intent.amount_capturable_updated') {
       const commandeId = event.data.object.metadata?.commande_id;
       const order = commandeId ? db.getOrderById(commandeId) : null;
-      if (order && order.statut === 'En attente de paiement') {
+      console.log(`Webhook Stripe reçu pour ${commandeId} — statut actuel : ${order?.statut ?? 'COMMANDE INTROUVABLE'}`);
+      if (
+        order &&
+        (order.statut === 'En attente de paiement' ||
+          (order.statut === 'En attente du restaurant' && order.paiement_statut !== 'Autorisé'))
+      ) {
         await db.updateOrderAsync(order.id, {
           statut: 'En attente du restaurant',
           paiement_statut: 'Autorisé',
