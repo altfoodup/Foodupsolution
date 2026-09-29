@@ -29,6 +29,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoginPage(true);
     }
 
+    // Arrivée depuis un bouton d'inscription du site vitrine (?inscription=...) :
+    // pas de connexion automatique, on affiche l'écran de connexion
+    // (la fenêtre de création de compte s'ouvre par-dessus).
+    if (new URLSearchParams(window.location.search).has('inscription')) {
+      setIsLoginPage(true);
+      setIsLoading(false);
+      return;
+    }
+
     const savedEmail = localStorage.getItem('foodup_active_email') || 'julie@foodhop.test';
     loginByEmail(savedEmail)
       .catch(() => {
