@@ -13,9 +13,13 @@ function MainLayout() {
   const { currentUser, isLoading, isLoginPage, setIsLoginPage } = useAuth();
   // Lien direct depuis le site vitrine : ?inscription=client | restaurateur | livreur
   // ouvre automatiquement la fenêtre de création de compte avec le bon profil.
-  const lienInscription = new URLSearchParams(window.location.search).get('inscription');
-  const rolesInscription: Record<string, Role> = { client: 'Client', restaurateur: 'Restaurateur', livreur: 'Livreur' };
-  const roleDepuisLien = lienInscription ? rolesInscription[lienInscription.toLowerCase()] : undefined;
+  // Le profil est lu UNE SEULE FOIS au démarrage : l'adresse est ensuite nettoyée
+  // (voir AuthContext), il ne faut donc pas la relire à chaque affichage.
+  const [roleDepuisLien] = useState<Role | undefined>(() => {
+    const lienInscription = new URLSearchParams(window.location.search).get('inscription');
+    const rolesInscription: Record<string, Role> = { client: 'Client', restaurateur: 'Restaurateur', livreur: 'Livreur' };
+    return lienInscription ? rolesInscription[lienInscription.toLowerCase()] : undefined;
+  });
   const [isRegisterOpen, setIsRegisterOpen] = useState(!!roleDepuisLien);
 
   if (isLoading) {
