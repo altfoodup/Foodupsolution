@@ -3,11 +3,64 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { db, FRAIS_LIVRAISON, FRAIS_SERVICE, calculerRemunerationLivreur } from './server/storage.js';
+import {
+  creerAutorisationCommande,
+  capturerPaiement,
+  annulerOuRembourser,
+  verserAuxPartenaires,
+  compteEstPret,
+  creerCompteConnecte,
+  creerSessionOnboarding,
+  construireEvenementWebhook,
+} from './server/stripe.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+
+// Webhook Stripe : doit rester AVANT express.json() (corps brut nécessaire)
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+  let event;
+  try {
+    event = construireEvenementWebhook(req.body as Buffer, req.headers['stripe-signature'] as string);
+  } catch (err: any) {
+    console.error('Webhook Stripe invalide :', err.message);
+    return res.status(400).send('Signature invalide');
+  }
+
+  try {
+    if (event.type === 'payment_intent.amount_capturable_updated') {
+      const commandeId = event.data.object.metadata?.commande_id;
+      const order = commandeId ? db.getOrderById(commandeId) : null;
+      if (order && order.statut === 'En attente de paiement') {
+        await db.updateOrderAsync(order.id, {
+          statut: 'En attente du restaurant',
+          paiement_statut: 'Autorisé',
+        });
+        await db.createHistoryEventAsync({
+          commande_id: order.id,
+          acteur_id: order.client_id,
+          action: 'PAIEMENT_AUTORISE',
+          description: `Le paiement de la commande ${order.id} a été autorisé par la banque du client.`,
+        });
+      }
+    }
+
+    if (event.type === 'payment_intent.payment_failed') {
+      const commandeId = event.data.object.metadata?.commande_id;
+      const order = commandeId ? db.getOrderById(commandeId) : null;
+      if (order && order.statut === 'En attente de paiement') {
+        await db.updateOrderAsync(order.id, { paiement_statut: 'Échec' });
+      }
+    }
+  } catch (err: any) {
+    console.error('Erreur traitement webhook Stripe :', err.message);
+    return res.status(500).send('Erreur de traitement');
+  }
+
+  res.json({ received: true });
+});
 
 app.use(express.json());
 
@@ -313,7 +366,10 @@ app.get('/api/orders', (req: Request, res: Response) => {
       return res.json([]);
     }
     // Strictly isolate orders to the owner's restaurant
-    return res.json(db.getOrdersByRestaurant(restaurant.id));
+    // (les commandes non encore payées ne sont pas visibles du restaurateur)
+    return res.json(
+      db.getOrdersByRestaurant(restaurant.id).filter(o => o.statut !== 'En attente de paiement')
+    );
   }
 
   if (authUser.role === 'Livreur') {
@@ -370,7 +426,21 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       instructions_livraison: instructions_livraison || authUser.instructions_livraison,
       items
     });
-    res.status(201).json(newOrder);
+
+    // Autorisation de carte (le débit réel a lieu quand le restaurateur accepte)
+    const { paymentIntentId, clientSecret } = await creerAutorisationCommande({
+      commandeId: newOrder.id,
+      montantTotal: newOrder.total,
+      emailClient: authUser.email,
+    });
+
+    await db.updateOrderAsync(newOrder.id, {
+      statut: 'En attente de paiement',
+      paiement_statut: 'Non payé',
+      stripe_payment_intent_id: paymentIntentId,
+    });
+
+    res.status(201).json({ ...db.getOrderById(newOrder.id), client_secret: clientSecret });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Erreur lors de la création de la commande.' });
   }
@@ -399,10 +469,22 @@ app.post('/api/orders/:id/accept', async (req: Request, res: Response) => {
 
   const prepTime = Number(req.body.temps_preparation_min) || 20;
 
+  // 0. Encaissement Stripe (les anciennes commandes sans paiement Stripe passent sans encaissement)
+  let chargeId: string | null = null;
+  if (order.stripe_payment_intent_id) {
+    try {
+      const capture = await capturerPaiement(order.stripe_payment_intent_id);
+      chargeId = capture.chargeId;
+    } catch (err: any) {
+      return res.status(402).json({ error: `Le paiement n'a pas pu être encaissé : ${err.message}` });
+    }
+  }
+
   // 1. Update order status -> 'En préparation'
   const updatedOrder = await db.updateOrderAsync(order.id, {
     statut: 'En préparation',
     temps_preparation_min: prepTime,
+    ...(chargeId ? { paiement_statut: 'Payé', stripe_charge_id: chargeId } : {}),
   });
 
   // 2. Strict idempotency: check if mission already exists for this order
@@ -428,7 +510,7 @@ app.post('/api/orders/:id/accept', async (req: Request, res: Response) => {
 });
 
 // Restaurateur refuses order -> 'Refusée'
-app.post('/api/orders/:id/refuse', (req: Request, res: Response) => {
+app.post('/api/orders/:id/refuse', async (req: Request, res: Response) => {
   const authUser = getAuthUser(req);
   if (!authUser || authUser.role !== 'Restaurateur') {
     return res.status(403).json({ error: 'Action réservée au restaurateur.' });
@@ -447,10 +529,21 @@ app.post('/api/orders/:id/refuse', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Le motif de refus est obligatoire.' });
   }
 
-  const updatedOrder = db.updateOrder(order.id, {
+  let paiementStatut = 'Annulé';
+  if (order.stripe_payment_intent_id) {
+    try {
+      const r = await annulerOuRembourser(order.stripe_payment_intent_id);
+      if (r.action === 'rembourse') paiementStatut = 'Remboursé';
+    } catch (err: any) {
+      return res.status(502).json({ error: `Annulation du paiement impossible : ${err.message}` });
+    }
+  }
+
+  const updatedOrder = await db.updateOrderAsync(order.id, {
     statut: 'Refusée',
     motif_refus: motif,
-    paiement_simule: 'Annulé'
+    paiement_simule: 'Annulé',
+    paiement_statut: paiementStatut,
   });
 
   db.createHistoryEvent({
@@ -496,8 +589,8 @@ app.post('/api/orders/:id/ready', async (req: Request, res: Response) => {
   res.json(updatedOrder);
 });
 
-// Client cancels order (allowed only if 'En attente du restaurant')
-app.post('/api/orders/:id/cancel', (req: Request, res: Response) => {
+// Client cancels order (allowed only before the restaurant accepts)
+app.post('/api/orders/:id/cancel', async (req: Request, res: Response) => {
   const authUser = getAuthUser(req);
   if (!authUser) return res.status(401).json({ error: 'Non authentifié.' });
 
@@ -508,16 +601,27 @@ app.post('/api/orders/:id/cancel', (req: Request, res: Response) => {
     if (order.client_id !== authUser.id) {
       return res.status(403).json({ error: 'Action interdite sur cette commande.' });
     }
-    if (order.statut !== 'En attente du restaurant') {
+    if (order.statut !== 'En attente du restaurant' && order.statut !== 'En attente de paiement') {
       return res.status(400).json({ 
         error: 'L’annulation directe n’est possible qu’avant acceptation du restaurant. Veuillez signaler un problème pour demander une annulation.' 
       });
     }
   }
 
-  const updated = db.updateOrder(order.id, {
+  let paiementStatut = 'Annulé';
+  if (order.stripe_payment_intent_id) {
+    try {
+      const r = await annulerOuRembourser(order.stripe_payment_intent_id);
+      if (r.action === 'rembourse') paiementStatut = 'Remboursé';
+    } catch (err: any) {
+      return res.status(502).json({ error: `Annulation du paiement impossible : ${err.message}` });
+    }
+  }
+
+  const updated = await db.updateOrderAsync(order.id, {
     statut: 'Annulée',
-    paiement_simule: 'Annulé'
+    paiement_simule: 'Annulé',
+    paiement_statut: paiementStatut,
   });
 
   // Cancel associated mission if any
@@ -712,6 +816,61 @@ app.post('/api/missions/:id/deliver', async (req: Request, res: Response) => {
     statut: 'Livrée'
   });
 
+  // --- Virements Stripe vers le restaurateur et le livreur ---
+  const commande = db.getOrderById(mission.commande_id);
+  if (commande?.stripe_charge_id && !commande.stripe_transfer_restaurateur_id) {
+    try {
+      const restaurantCmd = db.getRestaurantById(commande.restaurant_id);
+      const proprio = restaurantCmd ? db.getUserById(restaurantCmd.proprietaire_id) : null;
+
+      const fraisService = Number((commande as any).frais_service ?? FRAIS_SERVICE);
+      const montantLivreur = Number(mission.remuneration_annoncee) || 0;
+      // À VÉRIFIER avec vos totaux : restaurateur = total - frais de livraison - frais de service
+      const montantResto = Math.max(0, Number((commande.total - commande.frais_livraison - fraisService).toFixed(2)));
+      const commission = Number((commande.total - montantResto - montantLivreur).toFixed(2));
+
+      if (commission < 0) throw new Error('Montants incohérents (commission négative).');
+      if (!proprio?.stripe_account_id || !authUser.stripe_account_id) {
+        throw new Error('Compte Stripe manquant pour le restaurateur ou le livreur.');
+      }
+      if (!(await compteEstPret(proprio.stripe_account_id)) || !(await compteEstPret(authUser.stripe_account_id))) {
+        throw new Error('Un des comptes Stripe n’a pas terminé son inscription.');
+      }
+
+      const v = await verserAuxPartenaires({
+        commandeId: commande.id,
+        chargeId: commande.stripe_charge_id,
+        restaurateur: { accountId: proprio.stripe_account_id, montant: montantResto },
+        livreur: montantLivreur > 0
+          ? { accountId: authUser.stripe_account_id, montant: montantLivreur }
+          : undefined,
+      });
+
+      await db.updateOrderAsync(commande.id, {
+        stripe_transfer_restaurateur_id: v.transferRestaurateurId,
+        stripe_transfer_livreur_id: v.transferLivreurId ?? '',
+        montant_restaurateur: montantResto,
+        commission_plateforme: commission,
+      });
+
+      await db.createHistoryEventAsync({
+        commande_id: commande.id,
+        acteur_id: authUser.id,
+        action: 'VIREMENTS_STRIPE',
+        description: `Virements effectués : restaurateur ${montantResto.toFixed(2)} €, livreur ${montantLivreur.toFixed(2)} €, commission ${commission.toFixed(2)} €.`
+      });
+    } catch (err: any) {
+      // La livraison reste valide ; le virement pourra être refait
+      console.error('Virements Stripe en échec :', err.message);
+      await db.createHistoryEventAsync({
+        commande_id: commande.id,
+        acteur_id: authUser.id,
+        action: 'VIREMENTS_STRIPE_ECHEC',
+        description: `Virements non effectués : ${err.message}`
+      });
+    }
+  }
+
   await db.createHistoryEventAsync({
     commande_id: mission.commande_id,
     mission_id: mission.id,
@@ -849,6 +1008,44 @@ app.post('/api/reports/:id/resolve', (req: Request, res: Response) => {
   });
 
   res.json(updated);
+});
+
+// ==========================================
+// STRIPE CONNECT (restaurateurs et livreurs)
+// ==========================================
+
+app.post('/api/stripe/connect/session', async (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser || (authUser.role !== 'Restaurateur' && authUser.role !== 'Livreur')) {
+    return res.status(403).json({ error: 'Réservé aux restaurateurs et livreurs.' });
+  }
+  try {
+    let accountId = authUser.stripe_account_id;
+    if (!accountId) {
+      accountId = await creerCompteConnecte({
+        email: authUser.email,
+        nom: `${authUser.prenom} ${authUser.nom}`,
+      });
+      db.updateUser(authUser.id, { stripe_account_id: accountId });
+    }
+    const clientSecret = await creerSessionOnboarding(accountId);
+    res.json({ client_secret: clientSecret });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erreur Stripe.' });
+  }
+});
+
+app.post('/api/stripe/connect/status', async (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return res.status(401).json({ error: 'Non authentifié.' });
+  if (!authUser.stripe_account_id) return res.json({ pret: false });
+  try {
+    const pret = await compteEstPret(authUser.stripe_account_id);
+    db.updateUser(authUser.id, { stripe_pret: pret });
+    res.json({ pret });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erreur Stripe.' });
+  }
 });
 
 // ==========================================
