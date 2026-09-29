@@ -1221,6 +1221,7 @@ export class DataStore {
       if (updates.statut) airtableFields.statut = updates.statut;
       if (updates.temps_preparation_min !== undefined) airtableFields.temps_preparation_min = updates.temps_preparation_min;
       if (updates.motif_refus) airtableFields.motif_refus_annulation = updates.motif_refus;
+      Object.assign(airtableFields, this.champsStripeCommande(updates));
 
       this.airtablePatch('Commandes', order.airtableRecordId, airtableFields)
         .catch(err => console.error('Error updating Commande in Airtable:', err));
@@ -1242,7 +1243,7 @@ export class DataStore {
       if (updates.statut) airtableFields.statut = updates.statut;
       if (updates.temps_preparation_min !== undefined) airtableFields.temps_preparation_min = updates.temps_preparation_min;
       if (updates.motif_refus) airtableFields.motif_refus_annulation = updates.motif_refus;
-
+      Object.assign(airtableFields, this.champsStripeCommande(updates));
       try {
         await this.airtablePatch('Commandes', order.airtableRecordId, airtableFields);
       } catch (err) {
