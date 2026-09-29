@@ -23,7 +23,7 @@
     "dotenv": "^17.2.3",
     "motion": "^12.23.24",
     "stripe": "^18.5.0",
-    "@stripe/stripe-js": "^8.1.0",
+    "@stripe/stripe-js": "^7.0.0",
     "@stripe/react-stripe-js": "^3.9.0"
   },
   "devDependencies": {
