@@ -3,6 +3,7 @@ import { useCart } from '../../context/CartContext.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { Plat } from '../../types.js';
 import { X, Plus, Minus, Trash2, ArrowLeft, ShoppingBag, Sparkles, CheckCircle2 } from 'lucide-react';
+import StripeCheckout from '../../StripeCheckout.js';
 
 interface Props {
   isOpen: boolean;
@@ -36,6 +37,11 @@ export const CartModal: React.FC<Props> = ({
   const [error, setError] = useState<string | null>(null);
   // Contraintes de livraison saisies au moment de la commande (code, interphone, étage…)
   const [instructions, setInstructions] = useState<string>(currentUser?.instructions_livraison || '');
+  // Étape de paiement Stripe : renseignée quand le serveur renvoie un client_secret
+  const [paiement, setPaiement] = useState<{ orderId: string; clientSecret: string; montant: number } | null>(null);
+
+  // Stripe est proposé seulement si la clé publique est configurée
+  const stripeActif = !!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 
   // Fetch cross-sell candidates from the same restaurant (desserts, drinks, sides)
   useEffect(() => {
@@ -94,6 +100,18 @@ export const CartModal: React.FC<Props> = ({
       }
 
       const createdOrder = await res.json();
+
+      // Paiement par carte : le serveur renvoie un client_secret, on affiche le formulaire Stripe
+      if (createdOrder.client_secret) {
+        setPaiement({
+          orderId: createdOrder.id,
+          clientSecret: createdOrder.client_secret,
+          montant: Number(createdOrder.total) || total,
+        });
+        return;
+      }
+
+      // Ancien fonctionnement (paiement simulé)
       clearCart();
       onClose();
       onOrderSuccess(createdOrder.id);
@@ -104,26 +122,72 @@ export const CartModal: React.FC<Props> = ({
     }
   };
 
+  // Le paiement par carte est accepté (autorisation faite) : on finalise la commande
+  const finaliserCommande = async () => {
+    if (!paiement || !currentUser) return;
+    const orderId = paiement.orderId;
+    try {
+      // Filet de sécurité : le serveur vérifie auprès de Stripe (le webhook fait la même chose)
+      await fetch(`/api/orders/${orderId}/confirm-payment`, {
+        method: 'POST',
+        headers: { 'x-user-id': currentUser.id }
+      });
+    } catch (err) {
+      console.error('Confirmation du paiement :', err);
+    }
+    setPaiement(null);
+    clearCart();
+    onClose();
+    onOrderSuccess(orderId);
+  };
+
+  // Le client abandonne le paiement : on annule la commande en attente
+  const annulerPaiement = async () => {
+    if (!paiement || !currentUser) return;
+    try {
+      await fetch(`/api/orders/${paiement.orderId}/cancel`, {
+        method: 'POST',
+        headers: { 'x-user-id': currentUser.id }
+      });
+    } catch (err) {
+      console.error('Annulation de la commande :', err);
+    }
+    setPaiement(null);
+  };
+
+  const handleBack = () => {
+    if (paiement) {
+      annulerPaiement();
+    } else {
+      onClose();
+    }
+  };
+
+  const handleClose = async () => {
+    if (paiement) await annulerPaiement();
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-[#FFFCF8] flex flex-col max-w-[480px] mx-auto overflow-hidden animate-in fade-in duration-200">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-[#E8E5DF] bg-white">
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleBack}
           className="w-9 h-9 rounded-full flex items-center justify-center border border-[#E8E5DF] text-[#20201E] hover:bg-[#FFF8EE]"
         >
           <ArrowLeft size={18} strokeWidth={2} />
         </button>
         <div className="text-center">
-          <h2 className="text-base font-bold text-[#20201E]">Mon Panier</h2>
+          <h2 className="text-base font-bold text-[#20201E]">{paiement ? 'Paiement' : 'Mon Panier'}</h2>
           {restaurant && (
             <p className="text-xs text-[#6B6B66]">{restaurant.nom}</p>
           )}
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleClose}
           className="w-9 h-9 rounded-full flex items-center justify-center border border-[#E8E5DF] text-[#6B6B66] hover:text-[#20201E]"
         >
           <X size={18} strokeWidth={2} />
@@ -132,7 +196,22 @@ export const CartModal: React.FC<Props> = ({
 
       {/* Content */}
       <div className="grow overflow-y-auto p-5 flex flex-col gap-6">
-        {items.length === 0 ? (
+        {paiement ? (
+          <div className="flex flex-col gap-3">
+            <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 flex justify-between text-sm font-extrabold text-[#20201E]">
+              <span>Total à payer</span>
+              <span className="text-[#C94F00]">{paiement.montant.toFixed(2).replace('.', ',')} €</span>
+            </div>
+            <div className="bg-white rounded-2xl border border-[#E8E5DF]">
+              <StripeCheckout
+                clientSecret={paiement.clientSecret}
+                montant={paiement.montant}
+                onSucces={finaliserCommande}
+                onAnnuler={annulerPaiement}
+              />
+            </div>
+          </div>
+        ) : items.length === 0 ? (
           <div className="my-auto text-center py-16 flex flex-col items-center gap-3">
             <div className="w-16 h-16 rounded-full bg-[#FFF1E5] text-[#C94F00] flex items-center justify-center">
               <ShoppingBag size={28} />
@@ -304,16 +383,22 @@ export const CartModal: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Notice simulated payment */}
-            <div className="text-center text-[12px] text-[#6B6B66] bg-[#FFF8EE] border border-[#F8D9BF] p-2.5 rounded-xl">
-              💡 <b>Paiement simulé — aucun débit bancaire</b>. Votre commande sera immédiatement transmise à {restaurant?.nom}.
-            </div>
+            {/* Notice de paiement */}
+            {stripeActif ? (
+              <div className="text-center text-[12px] text-[#6B6B66] bg-[#FFF8EE] border border-[#F8D9BF] p-2.5 rounded-xl">
+                🔒 <b>Paiement sécurisé par carte bancaire (Stripe)</b>. Votre carte n’est débitée que lorsque {restaurant?.nom} accepte la commande.
+              </div>
+            ) : (
+              <div className="text-center text-[12px] text-[#6B6B66] bg-[#FFF8EE] border border-[#F8D9BF] p-2.5 rounded-xl">
+                💡 <b>Paiement simulé — aucun débit bancaire</b>. Votre commande sera immédiatement transmise à {restaurant?.nom}.
+              </div>
+            )}
           </>
         )}
       </div>
 
       {/* Sticky Bottom Checkout Bar */}
-      {items.length > 0 && (
+      {items.length > 0 && !paiement && (
         <div className="p-4 bg-white border-t border-[#E8E5DF] shadow-[0_-4px_12px_rgba(0,0,0,0.04)] flex flex-col gap-3">
           {/* Boutons d'action déplacés en bas de l'écran */}
           <div className="flex justify-between items-center">
@@ -339,9 +424,11 @@ export const CartModal: React.FC<Props> = ({
             className="w-full py-4 bg-[#F26A00] hover:bg-[#C94F00] text-white font-extrabold text-base rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.99] disabled:opacity-50"
           >
             {isSubmitting ? (
-              <span>Transmission de la commande…</span>
+              <span>{stripeActif ? 'Préparation du paiement…' : 'Transmission de la commande…'}</span>
             ) : (
-              <span>Commander — {total.toFixed(2).replace('.', ',')} €</span>
+              <span>
+                {stripeActif ? 'Passer au paiement' : 'Commander'} — {total.toFixed(2).replace('.', ',')} €
+              </span>
             )}
           </button>
         </div>
