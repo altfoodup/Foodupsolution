@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.js';
 import { Role } from '../../types.js';
 import { X, User, Store, Bike } from 'lucide-react';
@@ -6,11 +6,17 @@ import { X, User, Store, Bike } from 'lucide-react';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  initialRole?: Role; // profil présélectionné (lien depuis le site vitrine)
 }
 
-export const RegisterModal: React.FC<Props> = ({ isOpen, onClose }) => {
+export const RegisterModal: React.FC<Props> = ({ isOpen, onClose, initialRole }) => {
   const { switchPersona } = useAuth();
-  const [role, setRole] = useState<Role>('Client');
+  const [role, setRole] = useState<Role>(initialRole || 'Client');
+
+  // Quand la fenêtre s'ouvre depuis un lien du site vitrine, on présélectionne le profil
+  useEffect(() => {
+    if (isOpen && initialRole) setRole(initialRole);
+  }, [isOpen, initialRole]);
   const [prenom, setPrenom] = useState('');
   const [nom, setNom] = useState('');
   const [email, setEmail] = useState('');
