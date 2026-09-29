@@ -308,13 +308,13 @@ export const AdminApp: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 shadow-2xs">
-              <span className="text-[11px] font-semibold text-[#6B6B66]">Volume du jour</span>
+              <span className="text-[11px] font-semibold text-[#6B6B66]">CA du jour</span>
               <p className="text-2xl font-extrabold text-[#20201E] mt-1">{kpis.caJour.toFixed(2)} €</p>
               <span className="text-[10px] text-[#6B6B66]">Volume total payé</span>
             </div>
 
             <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 shadow-2xs">
-              <span className="text-[11px] font-semibold text-[#6B6B66]">Volume du mois</span>
+              <span className="text-[11px] font-semibold text-[#6B6B66]">CA du mois</span>
               <p className="text-2xl font-extrabold text-[#20201E] mt-1">{kpis.caMois.toFixed(2)} €</p>
               <span className="text-[10px] text-[#6B6B66]">Mois en cours</span>
             </div>
@@ -337,62 +337,6 @@ export const AdminApp: React.FC = () => {
               <span className="text-[10px] text-[#138A63] font-semibold">Disponibles</span>
             </div>
           </div>
-
-          {/* Résultat FoodUp */}
-          {dashboardData?.finances && (() => {
-            const f = dashboardData.finances;
-            const eur = (n: number) => `${(n || 0).toFixed(2).replace('.', ',')} €`;
-            const lignes: Array<{ label: string; key: string; aide: string; fort?: boolean; signe?: string }> = [
-              { label: 'Commandes livrées', key: 'commandes', aide: '' },
-              { label: 'Payé par les clients', key: 'volume', aide: 'Total des commandes' },
-              { label: 'Reversé aux restaurants', key: 'restaurants', aide: 'Montant des plats', signe: '−' },
-              { label: 'Revenus FoodUp', key: 'revenus', aide: 'Frais de livraison + service', fort: true },
-              { label: 'Reversé aux livreurs', key: 'livreurs', aide: 'Rémunérations des courses', signe: '−' },
-              { label: 'Résultat FoodUp', key: 'resultat', aide: 'Revenus − livreurs', fort: true },
-            ];
-            return (
-              <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 flex flex-col gap-3">
-                <h2 className="text-xs font-bold text-[#20201E] uppercase tracking-wider flex items-center gap-1.5">
-                  <DollarSign size={14} className="text-[#F26A00]" />
-                  Résultat FoodUp
-                </h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-[#6B6B66] border-b border-[#E8E5DF]">
-                        <th className="text-left py-2 font-semibold"></th>
-                        <th className="text-right py-2 px-2 font-semibold">Aujourd'hui</th>
-                        <th className="text-right py-2 px-2 font-semibold">Mois en cours</th>
-                        <th className="text-right py-2 px-2 font-semibold">Année {new Date().getFullYear()}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lignes.map(l => (
-                        <tr key={l.key} className={`border-b border-[#F2EFEA] ${l.fort ? 'bg-[#FFF8EE]' : ''}`}>
-                          <td className="py-2 pr-2">
-                            <span className={l.fort ? 'font-bold text-[#20201E]' : 'text-[#20201E]'}>{l.label}</span>
-                            {l.aide && <span className="block text-[10px] text-[#6B6B66]">{l.aide}</span>}
-                          </td>
-                          {(['jour', 'mois', 'annee'] as const).map(p => {
-                            const v = f[p]?.[l.key] ?? 0;
-                            const couleur = l.key === 'resultat' ? (v < 0 ? 'text-[#D64545]' : 'text-[#138A63]') : 'text-[#20201E]';
-                            return (
-                              <td key={p} className={`py-2 px-2 text-right ${l.fort ? 'font-extrabold' : ''} ${couleur}`}>
-                                {l.key === 'commandes' ? v : `${l.signe && v ? l.signe + ' ' : ''}${eur(v)}`}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-[10px] text-[#6B6B66]">
-                  Calculé sur les commandes livrées, à la date de livraison (heure de Paris).
-                </p>
-              </div>
-            );
-          })()}
 
           {/* Quick Monitor: Live Orders & Incidents */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
