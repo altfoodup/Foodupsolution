@@ -7,10 +7,16 @@ import { ClientApp } from './components/client/ClientApp.js';
 import { RestaurateurApp } from './components/restaurateur/RestaurateurApp.js';
 import { LivreurApp } from './components/livreur/LivreurApp.js';
 import { AdminApp } from './components/admin/AdminApp.js';
+import { Role } from './types.js';
 
 function MainLayout() {
   const { currentUser, isLoading, isLoginPage, setIsLoginPage } = useAuth();
-  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  // Lien direct depuis le site vitrine : ?inscription=client | restaurateur | livreur
+  // ouvre automatiquement la fenêtre de création de compte avec le bon profil.
+  const lienInscription = new URLSearchParams(window.location.search).get('inscription');
+  const rolesInscription: Record<string, Role> = { client: 'Client', restaurateur: 'Restaurateur', livreur: 'Livreur' };
+  const roleDepuisLien = lienInscription ? rolesInscription[lienInscription.toLowerCase()] : undefined;
+  const [isRegisterOpen, setIsRegisterOpen] = useState(!!roleDepuisLien);
 
   if (isLoading) {
     return (
@@ -40,6 +46,7 @@ function MainLayout() {
         <RegisterModal
           isOpen={isRegisterOpen}
           onClose={() => setIsRegisterOpen(false)}
+          initialRole={roleDepuisLien}
         />
       </>
     );
