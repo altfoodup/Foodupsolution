@@ -252,14 +252,14 @@ export const OrderDetailView: React.FC<Props> = ({ orderId, onBack }) => {
                   </div>
 
                   {/* Stage text */}
-                  {/*<div className="flex flex-col grow pt-0.5">
+                  <div className="flex flex-col grow pt-0.5">
                     <span className={`text-sm font-bold ${isCurrent ? 'text-[#C94F00]' : isPast ? 'text-[#138A63]' : 'text-[#6B6B66]'}`}>
                       {stage.label}
                     </span>
                     <span className="text-xs text-[#6B6B66]">
                       {stage.desc}
                     </span>
-                  </div>*/}
+                  </div>
 
                   {/* Active pulse */}
                   {isCurrent && (
