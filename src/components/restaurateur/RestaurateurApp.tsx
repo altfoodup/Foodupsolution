@@ -1,3 +1,4 @@
+import { CATEGORIES_PLATS, comparerPlats } from '../../ordreCategories.js';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.js';
 import { Commande, Plat, Restaurant } from '../../types.js';
@@ -606,7 +607,7 @@ export const RestaurateurApp: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {plats.map(plat => (
+            {[...plats].sort(comparerPlats).map(plat => (
               <div
                 key={plat.id}
                 className="bg-white rounded-2xl border border-[#E8E5DF] p-4 flex gap-3.5 items-center justify-between shadow-2xs"
@@ -898,10 +899,7 @@ export const RestaurateurApp: React.FC = () => {
                     onChange={(e) => setDishCat(e.target.value)}
                     className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-xs bg-white text-[#20201E] focus:outline-none focus:border-[#F26A00]"
                   >
-                    <option value="Plats">Plats</option>
-                    <option value="Entrées">Entrées</option>
-                    <option value="Desserts">Desserts</option>
-                    <option value="Boissons">Boissons</option>
+                    {CATEGORIES_PLATS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
