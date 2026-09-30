@@ -1,3 +1,4 @@
+import { rangCategorie, comparerPlats } from '../../ordreCategories.js';
 import React, { useState, useEffect } from 'react';
 import { Restaurant, Plat } from '../../types.js';
 import { useCart } from '../../context/CartContext.js';
@@ -30,7 +31,8 @@ export const RestaurantView: React.FC<Props> = ({
       const res = await fetch(`/api/restaurants/${restaurant.id}/dishes`);
       if (res.ok) {
         const data = await res.json();
-        setPlats(data);
+        // Le client ne voit que les plats disponibles : une catégorie sans plat disponible n'apparaît pas
+        setPlats(Array.isArray(data) ? data.filter((p: Plat) => p.disponible) : []);
       }
     } catch (e) {
       console.error('Error fetching dishes', e);
@@ -39,29 +41,15 @@ export const RestaurantView: React.FC<Props> = ({
     }
   };
 
-  // Ordre d'affichage : entrées, plats, desserts, boissons, puis le reste.
-  // On compare sans majuscules ni accents, et sur le début du mot,
-  // pour reconnaître aussi "Entrée", "Plat principal", "dessert", etc.
-  const normalize = (c: string) =>
-    (c || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-  const categoryRank = (c: string) => {
-    const n = normalize(c);
-    if (n.startsWith('entree')) return 0;
-    if (n.startsWith('plat')) return 1;
-    if (n.startsWith('dessert')) return 2;
-    if (n.startsWith('boisson')) return 3;
-    return 4;
-  };
-
   const categories = ['Tout', ...Array.from(new Set(plats.map(p => p.categorie)))
-    .sort((a, b) => categoryRank(a) - categoryRank(b))];
+    .sort((a, b) => rangCategorie(a) - rangCategorie(b))];
 
   const filteredPlats = plats
     .filter(p => selectedCategory === 'Tout' || p.categorie === selectedCategory)
     .sort((a, b) => {
       // Le plat du jour passe toujours en premier
       if (!!a.plat_du_jour !== !!b.plat_du_jour) return a.plat_du_jour ? -1 : 1;
-      return categoryRank(a.categorie) - categoryRank(b.categorie);
+      return comparerPlats(a, b); // catégorie (Entrées, Plats, Pizza, Pâtes, Desserts…) puis nom
     });
 
   const handleAdd = (plat: Plat) => {
