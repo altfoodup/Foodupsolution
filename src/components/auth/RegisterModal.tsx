@@ -332,7 +332,7 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose, initialRole })
               </div>
 
               <div className="p-2.5 bg-white border border-[#F8D9BF] rounded-xl text-[11px] text-[#6B6B66]">
-                Frais payés par le client, fixés par FoodUp : <b>livraison 5,00 € + 10 % du montant des plats</b> · <b>service 1,00 €</b>. Votre revenu correspond au montant des plats.
+                Frais payés par le client, fixés par FoodUp : <b>livraison 3,00 € + 10 % du montant des plats</b> · <b>service 1,00 €</b>. Votre revenu correspond au montant des plats.
               </div>
 
               <h4 className="text-xs font-bold text-[#9E3E00] pt-2">Vos premiers plats</h4>
