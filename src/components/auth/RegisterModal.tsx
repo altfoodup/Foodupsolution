@@ -1,3 +1,4 @@
+import { CATEGORIES_PLATS } from '../../ordreCategories.js';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.js';
 import { Role } from '../../types.js';
@@ -362,10 +363,7 @@ export const RegisterModal: React.FC<Props> = ({ isOpen, onClose, initialRole })
                       onChange={(e) => majPlat(i, 'categorie', e.target.value)}
                       className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
                     >
-                      <option value="Entrées">Entrées</option>
-                      <option value="Plats">Plats</option>
-                      <option value="Desserts">Desserts</option>
-                      <option value="Boissons">Boissons</option>
+                      {CATEGORIES_PLATS.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <input
                       type="url"
