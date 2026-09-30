@@ -368,7 +368,7 @@ export const CartModal: React.FC<Props> = ({
                   Frais de livraison
                   {restaurant && (
                     <span className="block text-[10px]">
-                      {(restaurant.frais_livraison || 5).toFixed(2).replace('.', ',')} € + 10 % des plats
+                      {(restaurant.frais_livraison || 3).toFixed(2).replace('.', ',')} € + 10 % des plats
                     </span>
                   )}
                 </span>
