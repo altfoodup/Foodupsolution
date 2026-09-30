@@ -123,7 +123,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const subtotal = Number(items.reduce((sum, item) => sum + item.plat.prix * item.quantite, 0).toFixed(2));
   // Frais de livraison : base du restaurant + 10 % du sous-total des plats (même règle que le serveur)
   const fraisLivraison = restaurant && subtotal > 0
-    ? Number(((restaurant.frais_livraison || 5) + 0.10 * subtotal).toFixed(2))
+    ? Number(((restaurant.frais_livraison || 3) + 0.10 * subtotal).toFixed(2))
     : 0;
   const fraisService = restaurant ? restaurant.frais_service : 0;
   const total = Number((subtotal > 0 ? subtotal + fraisLivraison + fraisService : 0).toFixed(2));
