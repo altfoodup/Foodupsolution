@@ -164,3 +164,9 @@ export async function statutPaiement(paymentIntentId: string) {
   const pi = await getStripe().paymentIntents.retrieve(paymentIntentId);
   return pi.status;
 }
+
+// Paiement complet : statut + commande à laquelle il est rattaché
+export async function lirePaiement(paymentIntentId: string) {
+  const pi = await getStripe().paymentIntents.retrieve(paymentIntentId);
+  return { id: pi.id, statut: pi.status, commandeId: pi.metadata?.commande_id };
+}
