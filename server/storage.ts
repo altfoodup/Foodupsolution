@@ -21,7 +21,7 @@ interface DatabaseSchema {
 }
 
 // Règles de frais FoodUp (identiques partout)
-export const FRAIS_LIVRAISON = 5;   // base par défaut si la colonne frais_livraison du restaurant est vide
+export const FRAIS_LIVRAISON = 3;   // base par défaut si la colonne frais_livraison du restaurant est vide
 export const FRAIS_SERVICE = 1;     // frais de service FoodUp
 
 // Frais de livraison payés par le client :
