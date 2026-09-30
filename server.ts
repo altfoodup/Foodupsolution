@@ -13,7 +13,38 @@ import {
   creerSessionOnboarding,
   construireEvenementWebhook,
   statutPaiement,
+  lirePaiement,
 } from './server/stripe.js';
+
+// Cherche une commande ; si elle n'est pas (encore) en mémoire, on relit Airtable une fois
+async function trouverCommande(id?: string) {
+  if (!id) return undefined;
+  let order = db.getOrderById(id);
+  if (!order) {
+    await db.init();
+    order = db.getOrderById(id);
+  }
+  return order;
+}
+
+// Passe une commande payée à « En attente du restaurant » (utilisé par le webhook et par le client)
+async function marquerPaiementAutorise(order: any, paymentIntentId?: string) {
+  await db.updateOrderAsync(order.id, {
+    statut: 'En attente du restaurant',
+    paiement_statut: 'Autorisé',
+    ...(paymentIntentId && !order.stripe_payment_intent_id ? { stripe_payment_intent_id: paymentIntentId } : {}),
+  });
+  await db.createHistoryEventAsync({
+    commande_id: order.id,
+    acteur_id: order.client_id,
+    action: 'PAIEMENT_AUTORISE',
+    description: `Le paiement de la commande ${order.id} a été autorisé par la banque du client.`,
+  });
+}
+
+const attendPaiement = (order: any) =>
+  order.statut === 'En attente de paiement' ||
+  (order.statut === 'En attente du restaurant' && order.paiement_statut !== 'Autorisé');
 
 dotenv.config();
 
@@ -33,23 +64,14 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
   try {
     if (event.type === 'payment_intent.amount_capturable_updated') {
       const commandeId = event.data.object.metadata?.commande_id;
-      const order = commandeId ? db.getOrderById(commandeId) : null;
+      const order = await trouverCommande(commandeId);
       console.log(`Webhook Stripe reçu pour ${commandeId} — statut actuel : ${order?.statut ?? 'COMMANDE INTROUVABLE'}`);
-      if (
-        order &&
-        (order.statut === 'En attente de paiement' ||
-          (order.statut === 'En attente du restaurant' && order.paiement_statut !== 'Autorisé'))
-      ) {
-        await db.updateOrderAsync(order.id, {
-          statut: 'En attente du restaurant',
-          paiement_statut: 'Autorisé',
-        });
-        await db.createHistoryEventAsync({
-          commande_id: order.id,
-          acteur_id: order.client_id,
-          action: 'PAIEMENT_AUTORISE',
-          description: `Le paiement de la commande ${order.id} a été autorisé par la banque du client.`,
-        });
+      if (!order) {
+        // Réponse d'erreur : Stripe renverra l'événement un peu plus tard
+        return res.status(500).send('Commande introuvable pour le moment');
+      }
+      if (attendPaiement(order)) {
+        await marquerPaiementAutorise(order, event.data.object.id);
       }
     }
 
@@ -464,29 +486,19 @@ app.post('/api/orders/:id/confirm-payment', async (req: Request, res: Response) 
     return res.status(403).json({ error: 'Action réservée au client.' });
   }
 
-  const order = db.getOrderById(req.params.id);
+  const order = await trouverCommande(req.params.id);
   if (!order || order.client_id !== authUser.id) {
     return res.status(404).json({ error: 'Commande introuvable.' });
   }
 
   try {
-        if (
-      order.stripe_payment_intent_id &&
-      (order.statut === 'En attente de paiement' ||
-        (order.statut === 'En attente du restaurant' && order.paiement_statut !== 'Autorisé'))
-    ) {
-      const statut = await statutPaiement(order.stripe_payment_intent_id);
-      if (statut === 'requires_capture') {
-        await db.updateOrderAsync(order.id, {
-          statut: 'En attente du restaurant',
-          paiement_statut: 'Autorisé',
-        });
-        await db.createHistoryEventAsync({
-          commande_id: order.id,
-          acteur_id: order.client_id,
-          action: 'PAIEMENT_AUTORISE',
-          description: `Le paiement de la commande ${order.id} a été autorisé par la banque du client.`,
-        });
+    // Identifiant du paiement : celui enregistré sur la commande, sinon celui envoyé par le navigateur
+    const paymentIntentId = order.stripe_payment_intent_id || req.body?.payment_intent_id;
+    if (paymentIntentId && attendPaiement(order)) {
+      const paiement = await lirePaiement(paymentIntentId);
+      // Sécurité : le paiement doit bien appartenir à cette commande
+      if (paiement.commandeId === order.id && paiement.statut === 'requires_capture') {
+        await marquerPaiementAutorise(order, paiement.id);
       }
     }
     res.json(db.getOrderById(order.id));
