@@ -28,11 +28,7 @@ function FormulairePaiement({ montant, onSucces, onAnnuler }: Omit<Props, 'clien
   redirect: 'if_required',
   confirmParams: { return_url: window.location.href },
     });
-    
-    if (error) {
-      // ton code actuel pour afficher l'erreur
-      return;
-    }
+   
 
     if (error) {
       setErreur(error.message ?? 'Le paiement a échoué.');
