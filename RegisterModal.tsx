@@ -1,0 +1,480 @@
+import { CATEGORIES_PLATS } from '../../ordreCategories.js';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext.js';
+import { Role } from '../../types.js';
+import { X, User, Store, Bike } from 'lucide-react';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  initialRole?: Role; // profil présélectionné (lien depuis le site vitrine)
+}
+
+export const RegisterModal: React.FC<Props> = ({ isOpen, onClose, initialRole }) => {
+  const { switchPersona } = useAuth();
+  const [role, setRole] = useState<Role>(initialRole || 'Client');
+
+  // Quand la fenêtre s'ouvre depuis un lien du site vitrine, on présélectionne le profil
+  useEffect(() => {
+    if (isOpen && initialRole) setRole(initialRole);
+  }, [isOpen, initialRole]);
+  const [prenom, setPrenom] = useState('');
+  const [nom, setNom] = useState('');
+  const [email, setEmail] = useState('');
+  const [telephone, setTelephone] = useState('');
+  const [adresse, setAdresse] = useState('');
+  const [codePostal, setCodePostal] = useState('75014');
+  const [ville, setVille] = useState('Paris');
+  const [instructions, setInstructions] = useState('');
+
+  // Courier
+  const [moyenDeplacement, setMoyenDeplacement] = useState('Vélo électrique');
+  const [zoneLivraison, setZoneLivraison] = useState('Paris 14e');
+
+  // Restaurant
+  const [nomRestaurant, setNomRestaurant] = useState('');
+  const [cuisine, setCuisine] = useState('Cuisine française');
+  const [photoRestaurant, setPhotoRestaurant] = useState('');
+  // Plats saisis à l'inscription
+  type PlatSaisi = { nom: string; prix: string; categorie: string; description: string; image_url: string; plat_du_jour: boolean };
+  const nouveauPlat = (): PlatSaisi => ({ nom: '', prix: '', categorie: 'Plats', description: '', image_url: '', plat_du_jour: false });
+  const [platsSaisis, setPlatsSaisis] = useState<PlatSaisi[]>([nouveauPlat()]);
+  const majPlat = (i: number, champ: keyof PlatSaisi, valeur: any) => {
+    setPlatsSaisis(prev => prev.map((p, idx) => {
+      if (champ === 'plat_du_jour') return { ...p, plat_du_jour: idx === i ? valeur : false };
+      return idx === i ? { ...p, [champ]: valeur } : p;
+    }));
+  };
+
+  // Photo du livreur
+  const [photoLivreur, setPhotoLivreur] = useState('');
+  const [descriptionResto, setDescriptionResto] = useState('');
+  const [quartier, setQuartier] = useState('Plaisance');
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role,
+          prenom,
+          nom,
+          email,
+          telephone,
+          adresse,
+          code_postal: codePostal,
+          ville,
+          instructions_livraison: instructions,
+          moyen_deplacement: moyenDeplacement,
+          zone_livraison: zoneLivraison,
+          nom_restaurant: nomRestaurant,
+          cuisine,
+          description_restaurant: descriptionResto,
+          quartier,
+          delai: '20–30 min',
+          photo_restaurant: photoRestaurant,
+          photo_url: photoLivreur,
+          plats: platsSaisis.filter(p => p.nom.trim() && p.prix !== '')
+        })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erreur lors de l’inscription');
+      }
+
+      const data = await res.json();
+      await switchPersona(data.user.email);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Une erreur est survenue.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+      <div className="bg-[#FFFCF8] w-full max-w-lg rounded-2xl border border-[#E8E5DF] p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="flex items-center justify-between pb-4 border-b border-[#E8E5DF]">
+          <div>
+            <h2 className="text-xl font-bold text-[#20201E]">Créer un compte FoodUp</h2>
+            <p className="text-sm text-[#6B6B66]">Rejoignez le réseau local de restauration indépendante.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center border border-[#E8E5DF] text-[#6B6B66] hover:text-[#20201E] hover:bg-[#FFF1E5]"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Role Choice */}
+        <div className="grid grid-cols-3 gap-2 my-5">
+          <button
+            type="button"
+            onClick={() => setRole('Client')}
+            className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-xs font-semibold ${
+              role === 'Client'
+                ? 'border-[#F26A00] bg-[#FFF1E5] text-[#9E3E00]'
+                : 'border-[#E8E5DF] bg-white text-[#6B6B66] hover:border-[#F26A00]'
+            }`}
+          >
+            <User size={20} className={role === 'Client' ? 'text-[#F26A00]' : 'text-[#6B6B66]'} />
+            Commander
+          </button>
+          <button
+            type="button"
+            onClick={() => setRole('Restaurateur')}
+            className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-xs font-semibold ${
+              role === 'Restaurateur'
+                ? 'border-[#F26A00] bg-[#FFF1E5] text-[#9E3E00]'
+                : 'border-[#E8E5DF] bg-white text-[#6B6B66] hover:border-[#F26A00]'
+            }`}
+          >
+            <Store size={20} className={role === 'Restaurateur' ? 'text-[#F26A00]' : 'text-[#6B6B66]'} />
+            Restaurateur
+          </button>
+          <button
+            type="button"
+            onClick={() => setRole('Livreur')}
+            className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-xs font-semibold ${
+              role === 'Livreur'
+                ? 'border-[#F26A00] bg-[#FFF1E5] text-[#9E3E00]'
+                : 'border-[#E8E5DF] bg-white text-[#6B6B66] hover:border-[#F26A00]'
+            }`}
+          >
+            <Bike size={20} className={role === 'Livreur' ? 'text-[#F26A00]' : 'text-[#6B6B66]'} />
+            Livreur
+          </button>
+        </div>
+
+        {error && (
+          <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-[#20201E] mb-1">Prénom</label>
+              <input
+                type="text"
+                required
+                value={prenom}
+                onChange={(e) => setPrenom(e.target.value)}
+                placeholder="Ex. Alexandre"
+                className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#20201E] mb-1">Nom</label>
+              <input
+                type="text"
+                required
+                value={nom}
+                onChange={(e) => setNom(e.target.value)}
+                placeholder="Ex. Lefèvre"
+                className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-[#20201E] mb-1">Email</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="alexandre@example.com"
+                className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#20201E] mb-1">Téléphone</label>
+              <input
+                type="tel"
+                value={telephone}
+                onChange={(e) => setTelephone(e.target.value)}
+                placeholder="06 12 34 56 78"
+                className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#20201E] mb-1">Adresse</label>
+            <input
+              type="text"
+              required
+              value={adresse}
+              onChange={(e) => setAdresse(e.target.value)}
+              placeholder="14 rue de la Roquette"
+              className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-[#20201E] mb-1">Code Postal</label>
+              <input
+                type="text"
+                value={codePostal}
+                onChange={(e) => setCodePostal(e.target.value)}
+                className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#20201E] mb-1">Ville</label>
+              <input
+                type="text"
+                value={ville}
+                onChange={(e) => setVille(e.target.value)}
+                className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+              />
+            </div>
+          </div>
+
+          {/* Role specific inputs */}
+          {role === 'Client' && (
+            <div>
+              <label className="block text-xs font-semibold text-[#20201E] mb-1">Instructions de livraison (facultatif)</label>
+              <input
+                type="text"
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder="Code porte, étage, interphone..."
+                className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+              />
+            </div>
+          )}
+
+          {role === 'Restaurateur' && (
+            <div className="p-3.5 bg-[#FFF8EE] border border-[#F8D9BF] rounded-xl space-y-3">
+              <h4 className="text-xs font-bold text-[#9E3E00]">Informations du restaurant</h4>
+              <div>
+                <label className="block text-xs font-semibold text-[#20201E] mb-1">Nom de l’établissement</label>
+                <input
+                  type="text"
+                  required
+                  value={nomRestaurant}
+                  onChange={(e) => setNomRestaurant(e.target.value)}
+                  placeholder="Ex. Pizzeria Bella Vita"
+                  className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#20201E] mb-1">Type de cuisine</label>
+                  <select
+                    value={cuisine}
+                    onChange={(e) => setCuisine(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                  >
+                    <option value="Cuisine française">Cuisine française</option>
+                    <option value="Bistrot moderne">Bistrot moderne</option>
+                    <option value="Italienne">Italienne</option>
+                    <option value="Pizza">Pizza</option>
+                    <option value="Libanaise">Libanaise</option>
+                    <option value="Mexicaine">Mexicaine</option>
+                    <option value="Indienne">Indienne</option>
+                    <option value="Thaïlandaise">Thaïlandaise</option>
+                    <option value="Japonaise">Japonaise</option>
+                    <option value="Tibétaine">Tibétaine</option>
+                    <option value="Végétarienne">Végétarienne</option>
+                    <option value="Healthy & bowls">Healthy & bowls</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#20201E] mb-1">Quartier</label>
+                  <input
+                    type="text"
+                    value={quartier}
+                    onChange={(e) => setQuartier(e.target.value)}
+                    placeholder="Plaisance / Alésia"
+                    className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#20201E] mb-1">Courte description</label>
+                <textarea
+                  rows={2}
+                  value={descriptionResto}
+                  onChange={(e) => setDescriptionResto(e.target.value)}
+                  placeholder="Spécialités de pâtes fraîches et pizzas au feu de bois..."
+                  className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#20201E] mb-1">Photo du restaurant (lien)</label>
+                <input
+                  type="url"
+                  value={photoRestaurant}
+                  onChange={(e) => setPhotoRestaurant(e.target.value)}
+                  placeholder="https://images.unsplash.com/photo-..."
+                  className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                />
+                <p className="text-[10px] text-[#6B6B66] mt-1">Collez le lien <b>de l’image</b> (clic droit sur l’image → « Copier l’adresse de l’image »), pas celui de la page.</p>
+              </div>
+
+              <div className="p-2.5 bg-white border border-[#F8D9BF] rounded-xl text-[11px] text-[#6B6B66]">
+                Frais payés par le client, fixés par FoodUp : <b>livraison 3,00 € + 10 % du montant des plats</b> · <b>service 1,00 €</b>. Votre revenu correspond au montant des plats.
+              </div>
+
+              <h4 className="text-xs font-bold text-[#9E3E00] pt-2">Vos premiers plats</h4>
+              {platsSaisis.map((p, i) => (
+                <div key={i} className="p-2.5 bg-white border border-[#E8E5DF] rounded-xl space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={p.nom}
+                      onChange={(e) => majPlat(i, 'nom', e.target.value)}
+                      placeholder="Nom du plat"
+                      className="col-span-2 w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                    />
+                    <input
+                      type="number"
+                      step="0.10"
+                      min="0"
+                      value={p.prix}
+                      onChange={(e) => majPlat(i, 'prix', e.target.value)}
+                      placeholder="Prix €"
+                      className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={p.categorie}
+                      onChange={(e) => majPlat(i, 'categorie', e.target.value)}
+                      className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                    >
+                      {CATEGORIES_PLATS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <input
+                      type="url"
+                      value={p.image_url}
+                      onChange={(e) => majPlat(i, 'image_url', e.target.value)}
+                      placeholder="Lien photo du plat"
+                      className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={p.description}
+                    onChange={(e) => majPlat(i, 'description', e.target.value)}
+                    placeholder="Description (facultatif)"
+                    className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                  />
+                  <div className="flex justify-between items-center">
+                    <label className="flex items-center gap-1.5 text-xs text-[#20201E]">
+                      <input
+                        type="radio"
+                        name="plat_du_jour"
+                        checked={p.plat_du_jour}
+                        onChange={() => majPlat(i, 'plat_du_jour', true)}
+                      />
+                      Plat du jour
+                    </label>
+                    {platsSaisis.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setPlatsSaisis(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-[11px] text-[#D64545] hover:underline"
+                      >
+                        Retirer
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPlatsSaisis(prev => [...prev, nouveauPlat()])}
+                className="text-xs font-semibold text-[#C94F00] hover:underline"
+              >
+                + Ajouter un plat
+              </button>
+              <p className="text-[10px] text-[#6B6B66]">Vous pourrez compléter votre carte ensuite depuis votre espace restaurateur.</p>
+
+              <p className="text-[11px] text-[#6B6B66]">
+                ℹ️ Votre établissement sera soumis à validation par l’administrateur FoodUp avant ouverture aux commandes.
+              </p>
+            </div>
+          )}
+
+          {role === 'Livreur' && (
+            <div className="p-3.5 bg-[#E7F4EE] border border-[#BCE1D1] rounded-xl space-y-3">
+              <h4 className="text-xs font-bold text-[#138A63]">Informations livreur partenaire</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#20201E] mb-1">Moyen de transport</label>
+                  <select
+                    value={moyenDeplacement}
+                    onChange={(e) => setMoyenDeplacement(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                  >
+                    <option value="Vélo musculaire">Vélo musculaire</option>
+                    <option value="Vélo électrique">Vélo électrique</option>
+                    <option value="Vélo cargo">Vélo cargo</option>
+                    <option value="Scooter électrique">Scooter électrique</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#20201E] mb-1">Zone de livraison</label>
+                  <select
+                    value={zoneLivraison}
+                    onChange={(e) => setZoneLivraison(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                  >
+                    <option value="Paris 14e">Paris 14e</option>
+                    <option value="Paris 15e">Paris 15e</option>
+                    <option value="Paris Centre">Paris Centre</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#20201E] mb-1">Votre photo (lien)</label>
+                <input
+                  type="url"
+                  value={photoLivreur}
+                  onChange={(e) => setPhotoLivreur(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-2 border border-[#E8E5DF] rounded-xl text-sm focus:outline-none focus:border-[#F26A00] bg-white"
+                />
+                <p className="text-[10px] text-[#6B6B66] mt-1">Collez le lien <b>de l’image</b> (clic droit sur l’image → « Copier l’adresse de l’image »). Elle sera visible par les clients.</p>
+              </div>
+              <p className="text-[11px] text-[#6B6B66]">
+                ℹ️ Votre candidature sera examinée par l’équipe FoodUp avant l’accès aux missions.
+              </p>
+            </div>
+          )}
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-[#F26A00] hover:bg-[#C94F00] text-white font-semibold rounded-xl transition-colors disabled:opacity-50 text-sm"
+            >
+              {loading ? 'Création en cours…' : 'Créer mon compte'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
