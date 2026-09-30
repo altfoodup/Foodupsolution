@@ -8,7 +8,7 @@ const stripePromise = clePublique ? loadStripe(clePublique) : null;
 type Props = {
   clientSecret: string;
   montant: number;
-  onSucces: () => void;
+  onSucces: (paymentIntentId: string) => void;
   onAnnuler: () => void;
 };
 
@@ -38,7 +38,7 @@ function FormulairePaiement({ montant, onSucces, onAnnuler }: Omit<Props, 'clien
 
     // Capture manuelle : la carte est autorisée ("requires_capture"), le débit a lieu à l'acceptation
     if (paymentIntent && ['requires_capture', 'succeeded', 'processing'].includes(paymentIntent.status)) {
-      onSucces();
+      onSucces(paymentIntent.id);
     } else {
       setErreur('Le paiement n’a pas pu être confirmé. Veuillez réessayer.');
       setEnCours(false);
