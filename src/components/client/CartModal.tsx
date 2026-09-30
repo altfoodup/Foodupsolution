@@ -123,14 +123,15 @@ export const CartModal: React.FC<Props> = ({
   };
 
   // Le paiement par carte est accepté (autorisation faite) : on finalise la commande
-  const finaliserCommande = async () => {
+  const finaliserCommande = async (paymentIntentId?: string) => {
     if (!paiement || !currentUser) return;
     const orderId = paiement.orderId;
     try {
       // Filet de sécurité : le serveur vérifie auprès de Stripe (le webhook fait la même chose)
       await fetch(`/api/orders/${orderId}/confirm-payment`, {
         method: 'POST',
-        headers: { 'x-user-id': currentUser.id }
+        headers: { 'x-user-id': currentUser.id, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_intent_id: paymentIntentId })
       });
     } catch (err) {
       console.error('Confirmation du paiement :', err);
