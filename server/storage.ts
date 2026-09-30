@@ -68,14 +68,26 @@ export class DataStore {
   // tant qu'Airtable ne les renvoie pas encore (évite qu'ils disparaissent ou soient dupliqués).
   private recentLocal = new Map<object, number>();
   private markLocal(item: object) { this.recentLocal.set(item, Date.now()); }
-  private keepRecent<T extends { id: string; airtableRecordId?: string }>(oldList: T[], newList: T[]): T[] {
+  // debutRechargement : heure à laquelle le rechargement Airtable a commencé.
+  // Une ligne modifiée dans l'appli pendant (ou juste avant) ce rechargement est plus récente
+  // que ce qu'Airtable vient de renvoyer : on garde la version de l'appli pour ne pas l'écraser.
+  private keepRecent<T extends { id: string; airtableRecordId?: string }>(oldList: T[], newList: T[], debutRechargement = 0): T[] {
     const limit = Date.now() - 3 * 60 * 1000;
+    const seuilModif = debutRechargement - 10 * 1000;
+    const memeLigne = (a: T, b: T) => a.id === b.id || (!!a.airtableRecordId && a.airtableRecordId === b.airtableRecordId);
+
+    const fusion = newList.map(n => {
+      const local = oldList.find(o => memeLigne(o, n));
+      const t = local ? this.recentLocal.get(local) : undefined;
+      return local && t && t >= seuilModif ? local : n;
+    });
+
     const extra = oldList.filter(item => {
       const t = this.recentLocal.get(item);
       if (!t || t < limit) return false;
-      return !newList.some(n => n.id === item.id || (!!item.airtableRecordId && n.airtableRecordId === item.airtableRecordId));
+      return !newList.some(n => memeLigne(item, n));
     });
-    return extra.length ? [...extra, ...newList] : newList;
+    return extra.length ? [...extra, ...fusion] : fusion;
   }
 
   private airtablePat: string;
@@ -478,14 +490,14 @@ export class DataStore {
 
       const old = this.data;
       this.data = {
-        utilisateurs: this.keepRecent(old.utilisateurs, users),
-        restaurants: this.keepRecent(old.restaurants, restaurants),
-        plats: this.keepRecent(old.plats, plats),
-        commandes: this.keepRecent(old.commandes, commandes),
-        lignes_commande: this.keepRecent(old.lignes_commande, lignes_commande),
-        missions_livraison: this.keepRecent(old.missions_livraison, missions_livraison),
-        signalements: this.keepRecent(old.signalements, signalements),
-        historique_actions: this.keepRecent(old.historique_actions, historique_actions)
+        utilisateurs: this.keepRecent(old.utilisateurs, users, t0),
+        restaurants: this.keepRecent(old.restaurants, restaurants, t0),
+        plats: this.keepRecent(old.plats, plats, t0),
+        commandes: this.keepRecent(old.commandes, commandes, t0),
+        lignes_commande: this.keepRecent(old.lignes_commande, lignes_commande, t0),
+        missions_livraison: this.keepRecent(old.missions_livraison, missions_livraison, t0),
+        signalements: this.keepRecent(old.signalements, signalements, t0),
+        historique_actions: this.keepRecent(old.historique_actions, historique_actions, t0)
       };
 
       this.isInitialized = true;
@@ -1212,6 +1224,7 @@ export class DataStore {
     if (!order) return undefined;
     const now = new Date().toISOString();
     Object.assign(order, updates, { mise_a_jour_a: now });
+    this.markLocal(order);
 
     // Sync to Airtable
     if (order.airtableRecordId) {
@@ -1235,6 +1248,7 @@ export class DataStore {
     if (!order) return undefined;
     const now = new Date().toISOString();
     Object.assign(order, updates, { mise_a_jour_a: now });
+    this.markLocal(order);
 
     if (order.airtableRecordId) {
       const airtableFields: Record<string, any> = {
