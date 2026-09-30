@@ -271,16 +271,16 @@ export const OrderDetailView: React.FC<Props> = ({ orderId, onBack }) => {
           </div>
 
           {/* Assigned courier banner */}
-          {/* {order.livreur_nom && (
-            <div className="mt-5 pt-4 border-t border-[#E8E5DF] flex items-center gap-3 bg-[#E7F4EE] p-3 rounded-xl">
+         {order.livreur_nom && (
+          {/*<div className="mt-5 pt-4 border-t border-[#E8E5DF] flex items-center gap-3 bg-[#E7F4EE] p-3 rounded-xl">
               <Bike size={20} className="text-[#138A63] shrink-0" />
               <div className="flex flex-col text-xs">
                 <b className="text-[#138A63]">Livreur partenaire FoodUp</b>
                 <span className="text-[#20201E] font-medium">{order.livreur_nom} prend soin de votre livraison</span>
               </div>
-            </div>
+            </div>*/}
           )}
-          */}
+        
         </div>
       )} 
 
