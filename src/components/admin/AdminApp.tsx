@@ -419,7 +419,7 @@ export const AdminApp: React.FC = () => {
 
             {/* Filter buttons */}
             <div className="flex flex-wrap gap-1 text-xs">
-              {['Tous', 'En attente du restaurant', 'En préparation', 'Prête', 'En livraison', 'Livrée', 'Refusée'].map(f => (
+              {['Tous', 'En attente de paiement', 'En attente du restaurant', 'En préparation', 'Prête', 'En livraison', 'Livrée', 'Refusée', 'Annulée'].map(f => (
                 <button
                   key={f}
                   type="button"
@@ -428,7 +428,7 @@ export const AdminApp: React.FC = () => {
                     orderFilter === f ? 'bg-[#20201E] text-white border-[#20201E]' : 'bg-white border-[#E8E5DF] text-[#6B6B66]'
                   }`}
                 >
-                  {f}
+                  {f} ({f === 'Tous' ? orders.length : orders.filter(o => o.statut === f).length})
                 </button>
               ))}
             </div>
@@ -786,7 +786,7 @@ export const AdminApp: React.FC = () => {
       <AdminBottomNav
         activeTab={activeTab}
         onChangeTab={setActiveTab}
-        ordersCount={orders.length}
+        ordersCount={orders.filter(o => ['En attente du restaurant', 'En préparation', 'Prête', 'En livraison'].includes(o.statut)).length}
         incidentsCount={kpis.incidentsATraiter}
       />
     </div>
