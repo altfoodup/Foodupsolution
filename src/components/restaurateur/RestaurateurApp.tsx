@@ -291,12 +291,23 @@ export const RestaurateurApp: React.FC = () => {
   const dispatchedOrders = orders.filter(o => o.statut === 'En livraison');
   const pastOrders = orders.filter(o => o.statut === 'Livrée' || o.statut === 'Refusée' || o.statut === 'Annulée');
 
-  // KPI calculations
-  const deliveredOrders = orders.filter(o => o.statut === 'Livrée');
-  // Revenu du restaurant = montant des plats (les frais reviennent au livreur et à FoodUp)
+  // KPI calculations — uniquement sur la période choisie (Aujourd'hui / 7 jours / 30 jours)
+  const debutPeriode = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0); // aujourd'hui à minuit (heure locale)
+    if (activityPeriod === 'semaine') d.setDate(d.getDate() - 6); // les 7 derniers jours, aujourd'hui compris
+    if (activityPeriod === 'mois') d.setDate(d.getDate() - 29);   // les 30 derniers jours, aujourd'hui compris
+    return d.getTime();
+  })();
+  const ordersPeriode = orders.filter(o => {
+    const t = new Date(o.cree_a).getTime();
+    return !isNaN(t) && t >= debutPeriode;
+  });
+  const deliveredOrders = ordersPeriode.filter(o => o.statut === 'Livrée');
+  // Revenu du restaurant = montant des plats uniquement (sans frais de livraison ni frais de service)
   const totalCA = deliveredOrders.reduce((sum, o) => sum + (o.sous_total ?? o.total), 0);
   const avgBasket = deliveredOrders.length > 0 ? totalCA / deliveredOrders.length : 0;
-  const refusalCount = orders.filter(o => o.statut === 'Refusée').length;
+  const refusalCount = ordersPeriode.filter(o => o.statut === 'Refusée').length;
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-6 pb-28 flex flex-col gap-6 min-h-screen">
@@ -696,7 +707,7 @@ export const RestaurateurApp: React.FC = () => {
                   activityPeriod === 'mois' ? 'bg-[#F26A00] text-white' : 'text-[#6B6B66]'
                 }`}
               >
-                Mois
+                30 jours
               </button>
             </div>
           </div>
@@ -708,7 +719,7 @@ export const RestaurateurApp: React.FC = () => {
               <p className="text-2xl font-extrabold text-[#C94F00] mt-1">
                 {totalCA.toFixed(2).replace('.', ',')} €
               </p>
-              <span className="text-[11px] text-[#138A63] font-medium">Commandes livrées</span>
+              <span className="text-[11px] text-[#138A63] font-medium">Montant des plats livrés</span>
             </div>
 
             <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 shadow-2xs">
@@ -716,7 +727,7 @@ export const RestaurateurApp: React.FC = () => {
               <p className="text-2xl font-extrabold text-[#20201E] mt-1">
                 {deliveredOrders.length}
               </p>
-              <span className="text-[11px] text-[#6B6B66]">Total traitées</span>
+              <span className="text-[11px] text-[#6B6B66]">Sur la période</span>
             </div>
 
             <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 shadow-2xs">
@@ -724,7 +735,7 @@ export const RestaurateurApp: React.FC = () => {
               <p className="text-2xl font-extrabold text-[#20201E] mt-1">
                 {avgBasket.toFixed(2).replace('.', ',')} €
               </p>
-              <span className="text-[11px] text-[#6B6B66]">Par client</span>
+              <span className="text-[11px] text-[#6B6B66]">Par commande livrée</span>
             </div>
 
             <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 shadow-2xs">
