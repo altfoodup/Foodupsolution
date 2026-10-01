@@ -229,6 +229,21 @@ export const AdminApp: React.FC = () => {
     livreursActifs: 0
   };
 
+  // Revenus FoodUp = frais de service (1 € par commande livrée)
+  const revenusFoodUp = (() => {
+    const livrees = orders.filter(o => o.statut === 'Livrée');
+    const debutJour = new Date(); debutJour.setHours(0, 0, 0, 0);
+    const debutMois = new Date(debutJour); debutMois.setDate(1);
+    const depuis = (debut: Date) => livrees.filter(o => new Date(o.cree_a).getTime() >= debut.getTime());
+    const somme = (l: Commande[]) => l.reduce((s, o) => s + (Number(o.frais_service) || 1), 0);
+    const jour = depuis(debutJour), mois = depuis(debutMois);
+    return {
+      jour: { montant: somme(jour), nb: jour.length },
+      mois: { montant: somme(mois), nb: mois.length },
+      total: { montant: somme(livrees), nb: livrees.length },
+    };
+  })();
+
   const filteredOrders = orders.filter(o => {
     if (orderFilter === 'Tous') return true;
     return o.statut === orderFilter;
@@ -367,36 +382,30 @@ export const AdminApp: React.FC = () => {
 
             <div className="bg-white rounded-2xl border border-[#E8E5DF] p-4 flex flex-col gap-3">
               <h2 className="text-xs font-bold text-[#20201E] uppercase tracking-wider flex items-center gap-1.5">
-                <AlertTriangle size={14} className="text-[#D64545]" />
-                Derniers signalements clients
+                <DollarSign size={14} className="text-[#138A63]" />
+                Revenus FoodUp
               </h2>
+              <p className="text-[11px] text-[#6B6B66] -mt-1">1 € de frais de service par commande livrée</p>
 
-              {reports.filter(r => r.statut !== 'Résolu').length === 0 ? (
-                <p className="text-xs text-[#138A63] py-4 text-center font-medium">
-                  ✓ Aucun incident en attente de traitement.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {reports.filter(r => r.statut !== 'Résolu').slice(0, 4).map(r => (
-                    <div key={r.id} className="p-2.5 bg-red-50/70 border border-red-200 rounded-xl flex justify-between items-center text-xs">
-                      <div>
-                        <b className="text-red-900">{r.type}</b> — {r.commande_id}
-                        <p className="text-[11px] text-red-800 line-clamp-1">{r.description}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedReport(r);
-                          setAdminResponse('');
-                        }}
-                        className="px-2.5 py-1 bg-[#D64545] text-white font-bold rounded-lg text-[10px]"
-                      >
-                        Traiter
-                      </button>
+              <div className="flex flex-col gap-2">
+                {[
+                  { libelle: "Aujourd'hui", ...revenusFoodUp.jour },
+                  { libelle: 'Mois en cours', ...revenusFoodUp.mois },
+                  { libelle: 'Depuis le lancement', ...revenusFoodUp.total },
+                ].map(ligne => (
+                  <div key={ligne.libelle} className="p-3 bg-[#FFFCF8] border border-[#E8E5DF] rounded-xl flex justify-between items-center">
+                    <div>
+                      <p className="text-xs font-bold text-[#20201E]">{ligne.libelle}</p>
+                      <p className="text-[11px] text-[#6B6B66]">
+                        {ligne.nb} commande{ligne.nb > 1 ? 's' : ''} livrée{ligne.nb > 1 ? 's' : ''}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <span className="text-lg font-extrabold text-[#138A63]">
+                      {ligne.montant.toFixed(2).replace('.', ',')} €
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
